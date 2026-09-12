@@ -49,7 +49,6 @@ input:focus,select:focus,button:focus-visible{outline:1px solid var(--acc);outli
 .muted{color:var(--mid)} .dim{color:var(--dim);font-size:13px}
 .big{font-family:var(--display);font-size:56px;line-height:.95;font-weight:300}
 .metaline{font-size:13px;color:var(--dim);margin-top:8px;line-height:1.5}
-.hr{height:1px;background:var(--line);margin:18px 0}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .stack{display:grid;gap:14px}
 label.f{display:block;font-size:13px;color:var(--dim);margin-bottom:7px}
@@ -64,10 +63,6 @@ label.f{display:block;font-size:13px;color:var(--dim);margin-bottom:7px}
 .opt{border:1px solid var(--line);border-radius:9px;padding:14px;text-align:left;background:var(--surface2)}
 .opt[aria-pressed="true"]{border-color:var(--acc)}
 .opt .k{font-weight:500} .opt .d{display:block;color:var(--dim);font-size:13px;margin-top:3px}
-.seg{display:flex;border:1px solid var(--line2);border-radius:8px;overflow:hidden}
-.seg button{flex:1;padding:12px 4px;font-size:14px;border-right:1px solid var(--line2);color:var(--mid)}
-.seg button:last-child{border-right:0}
-.seg button[aria-pressed="true"]{background:var(--acc);color:var(--acc-ink);font-weight:600}
 
 table{width:100%;border-collapse:collapse;font-size:14px}
 th{text-align:left;font-weight:400;color:var(--dim);padding:7px 4px;border-bottom:1px solid var(--line)}
@@ -78,7 +73,7 @@ tr:last-child td{border-bottom:0}
 .setgrid,.setrow{display:grid;grid-template-columns:34px 1fr 1fr 1fr 54px;gap:8px;align-items:center}
 .setrow{margin:10px 0}
 .setrow input{padding:15px 8px;text-align:center;font-size:17px}
-.setrow .idx{border:1px solid transparent;border-radius:6px;height:34px;color:var(--dim);font-size:14px}
+.setrow .idx{border:1px solid transparent;border-radius:6px;height:44px;color:var(--dim);font-size:14px}
 .setrow .idx.warm{border-color:var(--line2);color:var(--mid);font-size:11px}
 .setrow .tick{border:1px solid var(--line2);border-radius:8px;height:51px;font-size:14px}
 .setrow.done input{border-color:var(--line);color:var(--mid);background:#141210}
@@ -95,6 +90,11 @@ tr:last-child td{border-bottom:0}
 .bar i{display:block;height:100%;background:var(--acc)}
 .bar i.over{background:var(--red)}
 
+.folder{display:flex;justify-content:space-between;align-items:center;width:100%;text-align:left;
+  border-bottom:1px solid var(--line);padding:22px 2px;background:transparent}
+.folder .fname{font-family:var(--display);font-size:21px;display:block}
+.folder .meta{color:var(--dim);font-size:13px;margin-top:4px;display:block}
+.folder .chev{color:var(--acc);font-size:24px;line-height:1}
 .routine{border-bottom:1px solid var(--line);margin:0;background:transparent}
 .routine .go{display:block;width:100%;text-align:left;padding:20px 2px 6px}
 .routine .meta{color:var(--dim);font-size:13px;margin-top:5px}
@@ -103,6 +103,10 @@ tr:last-child td{border-bottom:0}
 .foot{position:fixed;left:0;right:0;bottom:0;background:linear-gradient(to top,var(--bg) 66%,transparent);
   padding:16px var(--pad) calc(16px + env(safe-area-inset-bottom));z-index:8}
 .foot .inner{max-width:540px;margin:0 auto}
+.restbar{font-family:var(--display);font-size:19px;color:var(--acc);border:1px solid var(--acc-soft);
+  border-radius:8px;padding:11px 14px;text-align:center;background:var(--surface)}
+.restbar.over{color:var(--ink);border-color:var(--line2)}
+.restbar.idle{color:var(--dim);font-family:var(--body);font-size:13px;border-color:var(--line)}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:26px;background:var(--acc);color:var(--acc-ink);
   padding:11px 18px;border-radius:999px;font-size:14px;font-weight:600;z-index:20}
 .scrim{position:fixed;inset:0;background:rgba(6,5,4,.84);display:flex;align-items:center;justify-content:center;padding:22px;z-index:30}
@@ -284,16 +288,17 @@ const exById = id => allEx().find(x=>x.id===id) || {id, name:"Removed exercise",
 /* ============================================================
    Atlas: routines, sessions, history
    ============================================================ */
-const BUILD="9";                 /* bump this and the CACHE name in sw.js together */
-const BUILT="12 September 2026";
+const BUILD="11";                 /* bump this and the CACHE name in sw.js together */
+const BUILT="13 September 2026";
 const KEY="atlas.state.v3";
 let S = load() || fresh();
-if(!S.program) S.program={name:"My routines", days:[], sessions:[]};
+if(!S.program) S.program={name:"My routines", days:[], sessions:[], folders:[]};
+if(!S.program.folders) S.program.folders=[];
 if(!S.custom) S.custom=[];
 CUSTOM=S.custom;
 let UI = {tab:"home", wizard:null, toast:null, pickFor:null, draft:{}, histId:null, cal:null, calDay:null,
           search:"", newEx:null, exHist:null, editing:false, warmMark:{}, focus:null, ask:null,
-          newRoutine:null, openSlots:{}, editRoutine:null, orm:null, tuneSlot:null, diag:null, who:null};
+          newRoutine:null, openSlots:{}, editRoutine:null, orm:null, tuneSlot:null, diag:null, who:null, folder:null, newFolder:null, moveFor:null, volMuscle:"chest"};
 let tick=null;
 
 function fresh(){ return {v:3, program:null, active:null, custom:[], cfg:{url:"",key:"",email:""}, updated:0}; }
@@ -347,7 +352,6 @@ function save(push){
 /* ============================================================
    PROGRAM
    ============================================================ */
-function order(mk){ return MK.indexOf(mk); }
 
 const P = () => S.program;
 const visibleDays = () => P().days.filter(d=>!d.hidden);
@@ -365,11 +369,6 @@ function performedSets(mk, days){
     });
   });
   return n;
-}
-function programSets(mk){
-  let t=0;
-  P().days.forEach((d,di)=>{ if(d.hidden) return; d.slots.forEach((s,si)=>{ if(s.muscle===mk) t+=plannedSets(di,si); }); });
-  return t;
 }
 function sessionMuscles(di){
   const seen=[];
@@ -406,6 +405,48 @@ function round(x,inc){ return Math.round(x/inc)*inc; }
 
 
 /* Double progression against your own last effort on this slot */
+const DEFAULT_REST={barbell:180, smith:180, machine:120, cable:90, dumbbell:120, bodyweight:90};
+const slotRest = (slot,ex) => slot.rest || DEFAULT_REST[ex.equip] || 120;
+
+/* The most recent logged set in this session, by timestamp */
+function lastLogged(a){
+  let best=null;
+  Object.keys(a.entries||{}).forEach(si=>(a.entries[si]||[]).forEach(x=>{
+    if(x.t && (!best || new Date(x.t)>new Date(best.t))) best={t:x.t, si:+si};
+  }));
+  return best;
+}
+function restState(){
+  const a=S.active; if(!a) return null;
+  const last=lastLogged(a); if(!last) return null;
+  const slot=P().days[a.di].slots[last.si];
+  const goal=slot?slotRest(slot, exById(slot.exId)):120;
+  const elapsed=Math.floor((Date.now()-new Date(last.t))/1000);
+  return {elapsed, goal, over:elapsed>=goal, left:goal-elapsed};
+}
+const mmss = s => (s<0?"-":"")+Math.floor(Math.abs(s)/60)+":"+String(Math.abs(s)%60).padStart(2,"0");
+
+/* One short tone. Silent if the browser blocks audio until you interact. */
+function beep(){
+  try{
+    const C=window.AudioContext||window.webkitAudioContext; if(!C) return;
+    const ctx=new C(), o=ctx.createOscillator(), g=ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value=660; o.type="sine";
+    g.gain.setValueAtTime(0.0001, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.55);
+    o.start(); o.stop(ctx.currentTime+0.6);
+  }catch(err){}
+}
+let wake=null;
+async function holdScreen(on){
+  try{
+    if(on && !wake && navigator.wakeLock) wake=await navigator.wakeLock.request("screen");
+    else if(!on && wake){ await wake.release(); wake=null; }
+  }catch(err){ wake=null; }
+}
+
 const slotRange = (slot,ex) => (slot.rep && slot.rep.length===2) ? slot.rep : ex.rep;
 const slotInc = (slot,ex) => slot.inc || INC[ex.equip] || 2.5;
 function target(di,si){
@@ -527,8 +568,22 @@ function clockText(){
   const s=Math.floor((Date.now()-new Date(S.active.start))/1000);
   return String(Math.floor(s/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0");
 }
-function startTick(){ stopTick(); tick=setInterval(()=>{ const el=$("#clock"); if(el) el.textContent=clockText(); },1000); }
-function stopTick(){ if(tick) clearInterval(tick); tick=null; }
+let beeped=null;
+function startTick(){
+  stopTick();
+  tick=setInterval(()=>{
+    const el=$("#clock"); if(el) el.textContent=clockText();
+    const r=restState(), bar=$("#rest");
+    if(bar && r){
+      bar.textContent = r.over ? "Rest "+mmss(r.elapsed)+", over by "+mmss(r.elapsed-r.goal) : "Rest "+mmss(r.left);
+      bar.className = "restbar"+(r.over?" over":"");
+      const key=(lastLogged(S.active)||{}).t;
+      if(r.over && beeped!==key){ beeped=key; beep(); holdScreen(false); }
+      if(!r.over) holdScreen(true);
+    } else if(bar){ bar.textContent="Log a set to start the rest clock"; bar.className="restbar idle"; }
+  },1000);
+}
+function stopTick(){ if(tick) clearInterval(tick); tick=null; holdScreen(false); }
 function focusBack(){
   if(!UI.focus) return;
   const el=document.getElementById(UI.focus);
@@ -539,7 +594,7 @@ function focusBack(){
    RENDER
    ============================================================ */
 function navBar(){
-  const t=[["home","Routines"],["history","History"],["info","Info"],["settings","Settings"]];
+  const t=[["home","Routines"],["progress","Progress"],["history","History"],["info","Info"],["settings","Settings"]];
   return `<div class="nav"><div class="brand">Atlas</div>
     <div class="row2">${t.map(([k,l])=>`<button data-tab="${k}" aria-pressed="${UI.tab===k && !UI.exHist}">${l}</button>`).join("")}</div></div>`;
 }
@@ -548,6 +603,8 @@ function render(){
   if(UI.newRoutine){ stopTick(); app.innerHTML=viewNewRoutine(); foot.innerHTML=askSheet(); focusBack(); return; }
   if(UI.newEx){ stopTick(); app.innerHTML=viewNewEx(); foot.innerHTML=askSheet(); return; }
   if(UI.pickFor){ stopTick(); app.innerHTML=viewPicker(); foot.innerHTML=askSheet(); focusBack(); return; }
+  if(UI.newFolder){ stopTick(); app.innerHTML=viewNewFolder(); foot.innerHTML=askSheet(); focusBack(); return; }
+  if(UI.moveFor!=null){ stopTick(); app.innerHTML=viewMove(); foot.innerHTML=askSheet(); return; }
   if(UI.tuneSlot){ stopTick(); app.innerHTML=viewTune(); foot.innerHTML=askSheet(); return; }
   if(UI.editRoutine!=null){ stopTick(); app.innerHTML=viewRoutineEditor(); foot.innerHTML=askSheet(); return; }
   if(S.active && !S.active.finishing){ app.innerHTML=viewSession(); foot.innerHTML=footSession()+askSheet(); startTick(); }
@@ -555,7 +612,8 @@ function render(){
   else{
     stopTick();
     app.innerHTML = navBar() + (UI.exHist ? viewExHistory()
-      : UI.tab==="home"?viewHome() : UI.tab==="history"?viewHistory() : UI.tab==="info"?viewInfo() : viewSettings());
+      : UI.tab==="home"?viewHome() : UI.tab==="progress"?viewProgress()
+      : UI.tab==="history"?viewHistory() : UI.tab==="info"?viewInfo() : viewSettings());
     foot.innerHTML = askSheet();
     focusBack();
   }
@@ -563,32 +621,89 @@ function render(){
 }
 
 /* ---------- Routines ---------- */
+function routineCard(d, di){
+  const last=lastSessionFor(di);
+  const sets=d.slots.reduce((a,s,si)=>a+plannedSets(di,si),0);
+  const nEx=d.slots.filter((s,si)=>!s.hidden && plannedSets(di,si)>0).length;
+  return `<div class="routine">
+    <button class="go" data-start="${di}">
+      <div class="row sb"><h2>${h(d.name)}</h2><span class="pill">Start</span></div>
+      <div class="meta">${nEx} ${nEx===1?"exercise":"exercises"}, ${sets} sets</div>
+      <div class="meta">${last&&last.end?"Last done "+dstamp(last.end)+", "+ago(last.end):"Not performed yet"}</div>
+    </button>
+    <div class="tools">
+      <button class="pill" data-editroutine="${di}">Edit</button>
+      <button class="pill" data-addex="${di}">Add exercise</button>
+      <button class="pill" data-movefor="${di}">Move</button>
+      <button class="pill" data-delroutine="${di}">Delete</button>
+    </div></div>`;
+}
+
 function viewHome(){
-  const p=P(), days=p.days;
-  const any=days.some(d=>!d.hidden);
-  return `<div class="top"><h1>${h(p.name)}</h1><span class="sub">${visibleDays().length} routines</span></div>
+  const p=P();
+  const live=(fid)=>p.days.map((d,di)=>({d,di})).filter(x=>!x.d.hidden && (x.d.folder||null)===fid);
+
+  if(UI.folder){
+    const f=p.folders.find(x=>x.id===UI.folder);
+    if(!f){ UI.folder=null; }
+    else{
+      const inside=live(f.id);
+      return `<div class="top"><h1>${h(f.name)}</h1><span class="sub">${inside.length} routines</span></div>
+      <div class="wrap">
+        ${inside.length?inside.map(x=>routineCard(x.d,x.di)).join("")
+          :`<div class="empty"><h2>Empty folder</h2><p>Create a routine here, or move one in.</p></div>`}
+        <button class="btn" data-newroutine="${f.id}">Create a routine here</button>
+        <button class="btn" data-renamefolder="${f.id}">Rename folder</button>
+        <button class="btn" data-delfolder="${f.id}" style="border-color:var(--red);color:var(--red)">Delete folder</button>
+        <button class="btn" data-closefolder="1">Back to all routines</button>
+      </div>`;
+    }
+  }
+
+  const loose=live(null);
+  const any=p.days.some(x=>!x.hidden) || p.folders.length;
+  return `<div class="top"><h1>${h(p.name)}</h1><span class="sub">${p.days.filter(x=>!x.hidden).length} routines</span></div>
   <div class="wrap">
-    ${days.map((d,di)=>{
-      if(d.hidden) return "";
-      const last=lastSessionFor(di);
-      const sets=d.slots.reduce((a,s,si)=>a+plannedSets(di,si),0);
-      const nEx=d.slots.filter((s,si)=>!s.hidden && plannedSets(di,si)>0).length;
-      return `<div class="routine">
-        <button class="go" data-start="${di}">
-          <div class="row sb"><h2>${h(d.name)}</h2><span class="pill">Start</span></div>
-          <div class="meta">${nEx} ${nEx===1?"exercise":"exercises"}, ${sets} sets</div>
-          <div class="meta">${last&&last.end?"Last done "+dstamp(last.end)+", "+ago(last.end):"Not performed yet"}</div>
-        </button>
-        <div class="tools">
-          <button class="pill" data-editroutine="${di}">Edit</button>
-          <button class="pill" data-addex="${di}">Add exercise</button>
-        </div></div>`;
+    ${p.folders.map(f=>{
+      const n=live(f.id).length;
+      return `<button class="folder" data-openfolder="${h(f.id)}">
+        <span><span class="fname">${h(f.name)}</span><span class="meta">${n} ${n===1?"routine":"routines"}</span></span>
+        <span class="chev">&rsaquo;</span></button>`;
     }).join("")}
-    ${any
-      ? `<button class="btn" data-newroutine="1">Create a routine</button>`
-      : `<div class="empty"><h2>No routines yet</h2><p>Create one, then add the exercises you actually do.</p>
-         <button class="btn solid" data-newroutine="1">Create a routine</button></div>`}
+    ${loose.map(x=>routineCard(x.d,x.di)).join("")}
+    ${any?`<button class="btn" data-newroutine="">Create a routine</button>
+           <button class="btn" data-newfolder="1">Create a folder</button>`
+        :`<div class="empty"><h2>No routines yet</h2><p>Create one, then add the exercises you actually do. Folders are optional, for grouping something like a push, pull and legs cycle.</p>
+          <button class="btn solid" data-newroutine="">Create a routine</button>
+          <button class="btn" data-newfolder="1">Create a folder</button></div>`}
   </div>`;
+}
+
+function viewNewFolder(){
+  const n=UI.newFolder;
+  return `<div class="nav"><div class="brand">Atlas</div></div>
+  <div class="top"><h1>${n.id?"Rename folder":"New folder"}</h1></div>
+  <div class="wrap"><div class="card stack">
+    <div><label class="f">Name</label><input id="fdname" value="${h(n.name||"")}" placeholder="Push pull legs"></div>
+    <button class="btn solid" data-savefolder="1">Save</button>
+    <button class="btn" data-cancelfolder="1">Cancel</button>
+  </div></div>`;
+}
+
+function viewMove(){
+  const di=UI.moveFor, day=P().days[di];
+  if(!day){ UI.moveFor=null; return viewHome(); }
+  const cur=day.folder||null;
+  return `<div class="nav"><div class="brand">Atlas</div></div>
+  <div class="top"><h1>Move ${h(day.name)}</h1></div>
+  <div class="wrap"><div class="opts">
+    <button class="opt" data-moveto="" aria-pressed="${cur===null}"><span class="k">No folder</span>
+      <span class="d">Sits on the main routines screen</span></button>
+    ${P().folders.map(f=>`<button class="opt" data-moveto="${h(f.id)}" aria-pressed="${cur===f.id}">
+      <span class="k">${h(f.name)}</span></button>`).join("")}
+  </div>
+  <button class="btn" data-newfolder="1">Create a new folder</button>
+  <button class="btn" data-cancelmove="1">Cancel</button></div>`;
 }
 
 function viewNewRoutine(){
@@ -626,6 +741,7 @@ function viewRoutineEditor(){
     :`<div class="empty"><h2>Empty routine</h2><p>Add the first exercise.</p></div>`}
     <button class="btn solid" data-addex="${di}">Add an exercise</button>
     <button class="btn" data-duproutine="${di}">Duplicate this routine</button>
+    <button class="btn" data-movefor="${di}">Move to a folder</button>
     <button class="btn" data-renameroutine="${di}">Rename routine</button>
     <button class="btn" data-delroutine="${di}" style="border-color:var(--red);color:var(--red)">Delete routine</button>
     <button class="btn" data-closeeditor="1">Done</button>
@@ -644,8 +760,10 @@ function viewTune(){
     <div class="grid2">
       <div><label class="f">Lowest reps</label><input id="tlo" inputmode="numeric" value="${rng[0]}"></div>
       <div><label class="f">Highest reps</label><input id="thi" inputmode="numeric" value="${rng[1]}"></div></div>
-    <div><label class="f">Weight jump on this machine, kg</label>
-      <input id="tinc" inputmode="decimal" value="${fmt(inc)}"></div>
+    <div class="grid2">
+      <div><label class="f">Weight jump, kg</label><input id="tinc" inputmode="decimal" value="${fmt(inc)}"></div>
+      <div><label class="f">Rest target, seconds</label><input id="trest" inputmode="numeric" value="${slotRest(slot,ex)}"></div>
+    </div>
     <p class="dim">Reps set where Atlas tells you to add weight. The jump is what it adds.</p>
     <button class="btn solid" data-savetune="1">Save</button>
     <button class="btn" data-canceltune="1">Cancel</button>
@@ -661,7 +779,9 @@ function viewSession(){
     if(slot.hidden || sets<=0) return;
     const ex=exById(slot.exId), t=target(di,si);
     const log=a.entries[si]||[];
-    if(log.length>=sets && !UI.openSlots[si]){
+    const warmCount=log.filter(x=>x.warm).length;
+    const working=log.length-warmCount;
+    if(working>=sets && !UI.openSlots[si]){
       const w=log.filter(x=>!x.warm);
       const summary=w.length?`${fmt(w[w.length-1].w)} kg &times; ${w.map(x=>x.r).join(", ")}`:"warm-ups only";
       body+=`<button class="done-line" data-openslot="${si}"><span class="nm">${h(ex.name)}</span><span class="vals">${summary}</span></button>`;
@@ -669,7 +789,7 @@ function viewSession(){
     }
     const prevSess=lastEntry(di,si,a.id), prev=prevSess?(prevSess.entries[si]||[]).filter(x=>!x.warm):null;
     let rows="";
-    for(let i=0;i<Math.max(sets,log.length);i++){
+    for(let i=0;i<Math.max(sets+warmCount, log.length);i++){
       const s=log[i], done=!!s, p=prev&&prev[i];
       const carry=(!done && i>0 && log[i-1])?log[i-1]:null;
       const phW=carry?fmt(carry.w):(t.weight!=null?fmt(t.weight):"kg");
@@ -691,7 +811,7 @@ function viewSession(){
       <div class="row" style="align-items:baseline;gap:12px;margin-top:10px">
         <span class="big">${t.weight!=null?fmt(t.weight):"&mdash;"}</span><span class="muted">kg &times; ${t.reps} reps</span></div>
       ${slot.note?`<div class="metaline" style="color:var(--mid)">${h(slot.note)}</div>`:""}
-      <div class="metaline">${h(t.note)} Target ${sets} sets.</div>
+      <div class="metaline">${h(t.note)} Target ${sets} working ${sets===1?"set":"sets"}${warmCount?", plus "+warmCount+" warm-up"+(warmCount>1?"s":""):""}.</div>
       <div class="setgrid" style="margin-top:14px"><span></span>
         <span class="dim" style="text-align:center">kg</span><span class="dim" style="text-align:center">reps</span>
         <span class="dim" style="text-align:center">RIR</span><span></span></div>
@@ -708,7 +828,12 @@ function viewSession(){
     <div class="card flat dim">${v.sets} sets logged, ${v.volume.toLocaleString()} kg lifted</div></div>`;
 }
 function footSession(){
+  const r=restState();
+  const label = !r ? "Log a set to start the rest clock"
+    : r.over ? "Rest "+mmss(r.elapsed)+", over by "+mmss(r.elapsed-r.goal)
+    : "Rest "+mmss(r.left);
   return `<div class="foot"><div class="inner">
+    <div class="restbar${!r?" idle":r.over?" over":""}" id="rest">${label}</div>
     <button class="btn solid" data-finishsession="1">Finish workout</button>
     <button class="btn" data-discard="1">Discard</button></div></div>`;
 }
@@ -892,6 +1017,115 @@ function viewNewEx(){
   </div></div>`;
 }
 
+/* ---------- Progress ---------- */
+function weekStart(dt){ const d=new Date(dt); const off=(d.getDay()+6)%7; d.setHours(0,0,0,0); d.setDate(d.getDate()-off); return d; }
+function weekKeys(n){
+  const out=[], base=weekStart(new Date());
+  for(let i=n-1;i>=0;i--){ const d=new Date(base); d.setDate(d.getDate()-i*7); out.push(d); }
+  return out;
+}
+const wkey = d => d.toISOString().slice(0,10);
+
+function barChart(values, labels, opts){
+  const o=opts||{}, W=320, H=120, n=values.length;
+  const max=Math.max(1, ...values);
+  const bw=(W-8)/n;
+  const bars=values.map((v,i)=>{
+    const hgt=Math.round((v/max)*(H-30));
+    const x=4+i*bw, y=H-20-hgt;
+    return `<rect x="${(x+bw*0.16).toFixed(1)}" y="${y}" width="${(bw*0.68).toFixed(1)}" height="${Math.max(hgt,1)}"
+      rx="2" fill="${i===n-1?"#b08d57":"#6d5636"}"/>`;
+  }).join("");
+  const ticks=labels.map((l,i)=>{
+    if(n>8 && i%2) return "";
+    return `<text x="${(4+i*bw+bw/2).toFixed(1)}" y="${H-6}" font-size="9" fill="#746e66" text-anchor="middle">${h(l)}</text>`;
+  }).join("");
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${h(o.label||"chart")}">
+    ${bars}${ticks}</svg>`;
+}
+
+function sessionsPerWeek(n){
+  const weeks=weekKeys(n), counts=weeks.map(()=>0);
+  P().sessions.filter(s=>s.finished).forEach(s=>{
+    const k=wkey(weekStart(s.end||s.start));
+    const i=weeks.findIndex(w=>wkey(w)===k);
+    if(i>=0) counts[i]++;
+  });
+  return {weeks, counts};
+}
+function volumePerWeek(mk, n){
+  const weeks=weekKeys(n), vals=weeks.map(()=>0);
+  P().sessions.filter(s=>s.finished).forEach(s=>{
+    const day=P().days[s.di]; if(!day) return;
+    const i=weeks.findIndex(w=>wkey(w)===wkey(weekStart(s.end||s.start)));
+    if(i<0) return;
+    Object.keys(s.entries||{}).forEach(si=>{
+      const slot=day.slots[si]; if(!slot || slot.muscle!==mk) return;
+      (s.entries[si]||[]).forEach(x=>{ if(!x.warm) vals[i]+=x.w*x.r; });
+    });
+  });
+  return {weeks, vals};
+}
+function mainLifts(){
+  const tally={};
+  P().sessions.filter(s=>s.finished).forEach(s=>{
+    const day=P().days[s.di]; if(!day) return;
+    Object.keys(s.entries||{}).forEach(si=>{
+      const slot=day.slots[si]; if(!slot) return;
+      const sets=(s.entries[si]||[]).filter(x=>!x.warm);
+      if(!sets.length) return;
+      const best=sets.reduce((a,b)=>e1rm(b)>e1rm(a)?b:a);
+      (tally[slot.exId]=tally[slot.exId]||[]).push({d:new Date(s.end||s.start), v:e1rm(best)});
+    });
+  });
+  return Object.keys(tally).map(id=>{
+    const pts=tally[id].sort((a,b)=>a.d-b.d);
+    const first=pts[0], last=pts[pts.length-1];
+    const monthAgo=Date.now()-30*86400000;
+    const ref=pts.filter(p=>p.d<monthAgo).pop() || first;
+    return {id, sessions:pts.length, now:last.v, change:last.v-ref.v, since:ref===first?"start":"a month ago", last:last.d};
+  }).sort((a,b)=>b.sessions-a.sessions);
+}
+
+function viewProgress(){
+  const done=P().sessions.filter(s=>s.finished);
+  if(!done.length) return `<div class="top"><h1>Progress</h1></div>
+    <div class="wrap"><div class="empty"><h2>Nothing to measure yet</h2>
+      <p>Charts appear once you have logged a session or two.</p></div></div>`;
+  const sw=sessionsPerWeek(12);
+  const lifts=mainLifts().slice(0,8);
+  const muscles=MK.filter(mk=>volumePerWeek(mk,8).vals.some(v=>v>0));
+  if(!muscles.includes(UI.volMuscle)) UI.volMuscle=muscles[0]||"chest";
+  const vol=volumePerWeek(UI.volMuscle,8);
+  const avg=Math.round(sw.counts.reduce((a,b)=>a+b,0)/12*10)/10;
+
+  return `<div class="top"><h1>Progress</h1><span class="sub">${done.length} sessions</span></div>
+  <div class="wrap">
+    <div class="card"><div class="row sb"><h2>Sessions a week</h2><span class="pill">${avg} average</span></div>
+      ${barChart(sw.counts, sw.weeks.map(w=>w.getDate()+" "+MONTHS[w.getMonth()]), {label:"Sessions per week"})}
+      <p class="metaline">Last twelve weeks. The right hand bar is the week you are in, so it fills as you go.</p></div>
+
+    <div class="card"><h2>Volume by muscle</h2>
+      <p class="dim" style="margin:6px 0 0">Weight times reps, working sets only.</p>
+      <div class="row" style="flex-wrap:wrap;margin-top:12px">
+        ${muscles.map(mk=>`<button class="pill ${UI.volMuscle===mk?"on":""}" data-volmuscle="${mk}">${h(M[mk].name)}</button>`).join("")}
+      </div>
+      ${barChart(vol.vals.map(v=>Math.round(v)), vol.weeks.map(w=>w.getDate()+" "+MONTHS[w.getMonth()]), {label:"Volume per week"})}
+      <p class="metaline">${fmt(vol.vals[vol.vals.length-1]/1000)} tonnes this week, against ${fmt(vol.vals[vol.vals.length-2]/1000)} last week.
+      Volume moves when you swap exercises or change rep ranges, so read it as a trend rather than a score.</p></div>
+
+    <div class="card"><h2>Estimated one rep max</h2>
+      <table style="margin-top:10px"><thead><tr><th>Lift</th><th class="n">Now</th><th class="n">Change</th></tr></thead><tbody>
+      ${lifts.map(l=>`<tr><td><button style="text-align:left" data-exhist="${h(l.id)}">${h(exById(l.id).name)}</button>
+        <div class="dim">${l.sessions} ${l.sessions===1?"session":"sessions"}</div></td>
+        <td class="n">${fmt(l.now)} kg</td>
+        <td class="n" style="color:${l.change>0.4?"var(--acc)":l.change<-0.4?"var(--red)":"var(--dim)"}">
+          ${l.sessions<2?"&mdash;":(l.change>0?"+":"")+fmt(l.change)+" kg"}</td></tr>`).join("")}
+      </tbody></table>
+      <p class="metaline">Against ${lifts.length&&lifts[0].since==="start"?"your first session on each lift":"a month ago, or your first session if that is more recent"}. Estimated from your best set, so it drifts above about ten reps.</p></div>
+  </div>`;
+}
+
 /* ---------- Info ---------- */
 function viewInfo(){
   const o=UI.orm;
@@ -982,9 +1216,13 @@ function doAct(act, arg){
   const p=P();
   if(act==="discard"){ S.active=null; UI.draft={}; UI.warmMark={}; UI.openSlots={}; save(); toast("Session discarded."); return; }
   if(act==="removeex"){ const [di,si]=arg.split("-").map(Number); p.days[di].slots[si].hidden=true; save(); return; }
+  if(act==="delfolder"){
+    p.days.forEach(day=>{ if(day.folder===arg) day.folder=null; });
+    p.folders=p.folders.filter(f=>f.id!==arg);
+    UI.folder=null; save(); toast("Folder deleted."); return;
+  }
   if(act==="delroutine"){
     const di=+arg;
-    if(visibleDays().length<=1){ toast("Keep at least one routine."); return; }
     p.days[di].hidden=true; UI.editRoutine=null; save(); toast("Routine deleted."); return;
   }
   if(act==="delsession"){ p.sessions=p.sessions.filter(x=>x.id!==arg); UI.histId=null; UI.editing=false; save(); toast("Session deleted."); return; }
@@ -1006,21 +1244,53 @@ document.addEventListener("click", async ev=>{
   if(d.askno){ UI.ask=null; render(); return; }
 
   if(d.tab){ if(d.tab==="settings" && S.cfg.url && S.cfg.key) refreshWho();
-    UI.tab=d.tab; UI.pickFor=null; UI.histId=null; UI.exHist=null; UI.editing=false; UI.editRoutine=null; UI.tuneSlot=null; UI.focus=null; window.scrollTo(0,0); render(); return; }
+    UI.tab=d.tab; UI.folder=null; UI.moveFor=null; UI.newFolder=null; UI.pickFor=null; UI.histId=null; UI.exHist=null; UI.editing=false; UI.editRoutine=null; UI.tuneSlot=null; UI.focus=null; window.scrollTo(0,0); render(); return; }
   if(d.openslot!=null && d.openslot!==""){ UI.openSlots[d.openslot]=!UI.openSlots[d.openslot]; render(); return; }
   if(d.exhist){ UI.exHist=d.exhist; UI.focus=null; window.scrollTo(0,0); render(); return; }
   if(d.closeex){ UI.exHist=null; window.scrollTo(0,0); render(); return; }
 
 
   /* routines */
-  if(d.newroutine){ UI.newRoutine={di:null,name:""}; UI.focus="rtname"; render(); return; }
+  if(d.openfolder){ UI.folder=d.openfolder; window.scrollTo(0,0); render(); return; }
+  if(d.closefolder){ UI.folder=null; window.scrollTo(0,0); render(); return; }
+  if(d.newfolder){ UI.newFolder={id:null,name:""}; UI.focus="fdname"; render(); return; }
+  if(d.renamefolder){
+    const f=P().folders.find(x=>x.id===d.renamefolder);
+    UI.newFolder={id:f.id, name:f.name}; UI.focus="fdname"; render(); return;
+  }
+  if(d.cancelfolder){ UI.newFolder=null; UI.focus=null; render(); return; }
+  if(d.savefolder){
+    const name=$("#fdname").value.trim();
+    if(!name){ toast("Give it a name."); return; }
+    if(UI.newFolder.id){ P().folders.find(x=>x.id===UI.newFolder.id).name=name; }
+    else{
+      const id="f"+Date.now();
+      P().folders.push({id, name});
+      if(UI.moveFor!=null){ P().days[UI.moveFor].folder=id; UI.moveFor=null; UI.folder=id; }
+    }
+    UI.newFolder=null; UI.focus=null; save(); render(); return;
+  }
+  if(d.delfolder){ ask("Delete this folder? The routines inside move back to the main screen.", "delfolder", d.delfolder, true); return; }
+  if(d.movefor!=null && d.movefor!==""){ UI.moveFor=+d.movefor; window.scrollTo(0,0); render(); return; }
+  if(d.cancelmove){ UI.moveFor=null; render(); return; }
+  if(d.moveto!=null){
+    P().days[UI.moveFor].folder = d.moveto || null;
+    UI.moveFor=null; save(); render(); toast("Moved."); return;
+  }
+  if(d.newroutine!=null){
+    UI.newRoutine={di:null, name:"", folder:d.newroutine||UI.folder||null};
+    UI.focus="rtname"; render(); return;
+  }
   if(d.renameroutine){ UI.newRoutine={di:+d.renameroutine, name:P().days[+d.renameroutine].name}; UI.focus="rtname"; render(); return; }
   if(d.cancelroutine){ UI.newRoutine=null; UI.focus=null; render(); return; }
   if(d.saveroutine){
     const name=$("#rtname").value.trim();
     if(!name){ toast("Give it a name."); return; }
     if(UI.newRoutine.di!=null) P().days[UI.newRoutine.di].name=name;
-    else { P().days.push({name, slots:[], hidden:false}); UI.editRoutine=P().days.length-1; }
+    else {
+      P().days.push({name, slots:[], hidden:false, folder:UI.newRoutine.folder||null});
+      UI.editRoutine=P().days.length-1;
+    }
     UI.newRoutine=null; UI.focus=null; save(); render(); return;
   }
   if(d.tune){ UI.tuneSlot=d.tune; window.scrollTo(0,0); render(); return; }
@@ -1031,6 +1301,8 @@ document.addEventListener("click", async ev=>{
     slot.note=$("#tnote").value.trim();
     if(!isNaN(lo)&&!isNaN(hi)&&lo>0&&hi>=lo) slot.rep=[lo,hi];
     if(!isNaN(inc)&&inc>0) slot.inc=inc;
+    const rest=parseInt($("#trest").value,10);
+    if(!isNaN(rest)&&rest>0) slot.rest=rest;
     UI.tuneSlot=null; save(); render(); toast("Saved."); return;
   }
   if(d.duproutine){
@@ -1151,6 +1423,7 @@ document.addEventListener("click", async ev=>{
   if(d.edelete){ ask("Delete this session? It cannot be recovered.", "delsession", UI.histId, true); return; }
 
   /* info */
+  if(d.volmuscle){ UI.volMuscle=d.volmuscle; render(); return; }
   if(d.orm){
     const w=parseFloat($("#ormw").value), r=parseInt($("#ormr").value,10);
     if(isNaN(w)||isNaN(r)||r<1){ toast("Enter a weight and reps."); return; }
