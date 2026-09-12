@@ -291,7 +291,7 @@ if(!S.custom) S.custom=[];
 CUSTOM=S.custom;
 let UI = {tab:"home", wizard:null, toast:null, pickFor:null, draft:{}, histId:null, cal:null, calDay:null,
           search:"", newEx:null, exHist:null, editing:false, warmMark:{}, focus:null, ask:null,
-          newRoutine:null, openSlots:{}, editRoutine:null, orm:null, tuneSlot:null};
+          newRoutine:null, openSlots:{}, editRoutine:null, orm:null, tuneSlot:null, diag:null};
 let tick=null;
 
 function fresh(){ return {v:3, program:null, active:null, custom:[], cfg:{url:"",key:"",email:""}, updated:0}; }
@@ -448,12 +448,39 @@ async function pullRemote(silent){
       S = data.data.v===3 ? data.data : migrate(data.data);
       syncCustom(); save(false); render(); toast("Pulled from cloud.");
     } else if(!silent) toast("This device is already current.");
-  }catch(err){ if(!silent) toast("Sync failed. Check your keys."); }
+  }catch(err){ if(!silent){ UI.diag="Pull failed: "+(err&&err.message?err.message:String(err)); render(); } }
 }
 async function signIn(email){
-  const c=await initSync(); if(!c){ toast("Add your Supabase details first."); return; }
-  const {error}=await c.auth.signInWithOtp({email, options:{emailRedirectTo:location.href.split("#")[0]}});
-  toast(error?"Could not send the link.":"Check your email for the sign-in link.");
+  UI.diag="Sending...";
+  render();
+  try{
+    if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(S.cfg.url)){
+      UI.diag="The project URL looks wrong. It should be https://yourprojectid.supabase.co with nothing after it."; render(); return;
+    }
+    if(!S.cfg.key || S.cfg.key.length<20){ UI.diag="The key looks wrong or missing."; render(); return; }
+    const c=await initSync();
+    if(!c){ UI.diag="Could not load the Supabase library. Are you online?"; render(); return; }
+    const {error}=await c.auth.signInWithOtp({email, options:{emailRedirectTo:location.href.split("#")[0]}});
+    UI.diag = error ? ("Supabase said: "+(error.message||JSON.stringify(error))+(error.status?" (status "+error.status+")":""))
+                    : "Sent. Check your email, including spam.";
+  }catch(err){
+    UI.diag="Failed before reaching Supabase: "+(err && err.message ? err.message : String(err));
+  }
+  render();
+}
+
+/* Plain reachability test that does not involve email at all */
+async function testConnection(){
+  UI.diag="Testing...";
+  render();
+  try{
+    const r=await fetch(S.cfg.url+"/auth/v1/health", {headers:{apikey:S.cfg.key, Authorization:"Bearer "+S.cfg.key}});
+    UI.diag = r.ok ? "Connection works. Status "+r.status+". The URL and key are reaching your project."
+                   : "Reached Supabase but it refused the request. Status "+r.status+". Usually a wrong or disabled key.";
+  }catch(err){
+    UI.diag="Could not reach that URL at all: "+(err&&err.message?err.message:String(err))+". Check the project URL.";
+  }
+  render();
 }
 async function whoami(){
   try{ const c=await initSync(); if(!c) return null; const {data:{user}}=await c.auth.getUser(); return user?user.email:null; }catch(err){ return null; }
@@ -919,6 +946,8 @@ function viewSettings(){
         <button class="btn" data-savecfg="1">Save connection</button>
         <div><label class="f">Email for the sign-in link</label><input id="sbemail" value="${h(S.cfg.email)}" placeholder="you@example.com"></div>
         <button class="btn" data-signin="1">Send sign-in link</button>
+        <button class="btn" data-testconn="1">Test connection</button>
+        ${UI.diag?`<div class="card" style="margin:0;background:var(--surface2)"><p class="dim" style="margin:0;word-break:break-word">${h(UI.diag)}</p></div>`:""}
         <div class="grid2"><button class="btn" data-pull="1" style="margin-top:0">Pull from cloud</button>
           <button class="btn" data-push="1" style="margin-top:0">Push to cloud</button></div>
         <p class="dim" id="who">Checking sign-in status.</p>
@@ -1117,7 +1146,15 @@ document.addEventListener("click", async ev=>{
 
   /* settings */
   if(d.savecfg){ S.cfg.url=$("#sburl").value.trim().replace(/\/$/,""); S.cfg.key=$("#sbkey").value.trim(); sb=null; save(false); toast("Saved."); render(); return; }
-  if(d.signin){ S.cfg.email=$("#sbemail").value.trim(); save(false); signIn(S.cfg.email); return; }
+  if(d.signin){
+    const em=$("#sbemail").value.trim();
+    if(!em || em.indexOf("@")<0){ toast("Enter your email first."); return; }
+    S.cfg.email=em; save(false); signIn(em); return;
+  }
+  if(d.testconn){
+    S.cfg.url=$("#sburl").value.trim().replace(/\/$/,""); S.cfg.key=$("#sbkey").value.trim(); sb=null; save(false);
+    testConnection(); return;
+  }
   if(d.pull){ pullRemote(false); return; }
   if(d.push){ await pushRemote(); toast("Pushed."); return; }
   if(d.export){
