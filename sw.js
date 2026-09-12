@@ -1,4 +1,4 @@
-const CACHE = "atlas-v9";
+const CACHE = "atlas-v9";   // matches BUILD in index.html
 const FILES = ["./", "./index.html", "./manifest.json", "./icon.svg"];
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));

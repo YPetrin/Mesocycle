@@ -284,6 +284,8 @@ const exById = id => allEx().find(x=>x.id===id) || {id, name:"Removed exercise",
 /* ============================================================
    Atlas: routines, sessions, history
    ============================================================ */
+const BUILD="9";                 /* bump this and the CACHE name in sw.js together */
+const BUILT="12 September 2026";
 const KEY="atlas.state.v3";
 let S = load() || fresh();
 if(!S.program) S.program={name:"My routines", days:[], sessions:[]};
@@ -963,6 +965,10 @@ function viewSettings(){
         <button class="btn" data-import="1" style="margin-top:0">Import file</button></div>
       <button class="btn" data-csv="1">Export sessions as CSV</button>
       <input type="file" id="importfile" accept="application/json" style="display:none"></div>
+    <div class="card"><h2>Version</h2>
+      <div class="row sb" style="margin-top:12px"><span class="dim">Build</span><strong>${BUILD}, ${BUILT}</strong></div>
+      <p class="metaline">If this does not match the newest build, your device is serving a cached copy.</p>
+      <button class="btn" data-update="1">Force update</button></div>
     <div class="card"><h2>Start again</h2>
       <button class="btn" data-newprogram="1">Clear all routines</button>
       <button class="btn" data-reset="1" style="border-color:var(--red);color:var(--red)">Erase everything on this device</button></div>
@@ -1184,6 +1190,18 @@ document.addEventListener("click", async ev=>{
     const a=document.createElement("a");
     a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
     a.download="atlas-sessions-"+new Date().toISOString().slice(0,10)+".csv"; a.click(); URL.revokeObjectURL(a.href); return;
+  }
+  if(d.update){
+    UI.diag="Clearing the cache..."; render();
+    try{
+      if("caches" in window){ const ks=await caches.keys(); await Promise.all(ks.map(k=>caches.delete(k))); }
+      if(navigator.serviceWorker){
+        const regs=await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r=>r.unregister()));
+      }
+    }catch(err){ /* best effort */ }
+    location.replace(location.pathname+"?v="+Date.now());
+    return;
   }
   if(d.newprogram){ ask("Clear every routine? Past sessions are kept.", "newprogram", null, true); return; }
   if(d.reset){ ask("Erase everything on this device? Cloud data is untouched until the next push.", "reset", null, true); return; }
