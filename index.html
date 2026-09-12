@@ -291,7 +291,7 @@ if(!S.custom) S.custom=[];
 CUSTOM=S.custom;
 let UI = {tab:"home", wizard:null, toast:null, pickFor:null, draft:{}, histId:null, cal:null, calDay:null,
           search:"", newEx:null, exHist:null, editing:false, warmMark:{}, focus:null, ask:null,
-          newRoutine:null, openSlots:{}, editRoutine:null, orm:null, tuneSlot:null, diag:null};
+          newRoutine:null, openSlots:{}, editRoutine:null, orm:null, tuneSlot:null, diag:null, who:null};
 let tick=null;
 
 function fresh(){ return {v:3, program:null, active:null, custom:[], cfg:{url:"",key:"",email:""}, updated:0}; }
@@ -463,6 +463,7 @@ async function signIn(email){
     const {error}=await c.auth.signInWithOtp({email, options:{emailRedirectTo:location.href.split("#")[0]}});
     UI.diag = error ? ("Supabase said: "+(error.message||JSON.stringify(error))+(error.status?" (status "+error.status+")":""))
                     : "Sent. Check your email, including spam.";
+    if(!error) refreshWho();
   }catch(err){
     UI.diag="Failed before reaching Supabase: "+(err && err.message ? err.message : String(err));
   }
@@ -481,6 +482,9 @@ async function testConnection(){
     UI.diag="Could not reach that URL at all: "+(err&&err.message?err.message:String(err))+". Check the project URL.";
   }
   render();
+}
+function refreshWho(){
+  whoami().then(em=>{ UI.who = em || false; render(); }).catch(()=>{ UI.who=false; render(); });
 }
 async function whoami(){
   try{ const c=await initSync(); if(!c) return null; const {data:{user}}=await c.auth.getUser(); return user?user.email:null; }catch(err){ return null; }
@@ -950,7 +954,9 @@ function viewSettings(){
         ${UI.diag?`<div class="card" style="margin:0;background:var(--surface2)"><p class="dim" style="margin:0;word-break:break-word">${h(UI.diag)}</p></div>`:""}
         <div class="grid2"><button class="btn" data-pull="1" style="margin-top:0">Pull from cloud</button>
           <button class="btn" data-push="1" style="margin-top:0">Push to cloud</button></div>
-        <p class="dim" id="who">Checking sign-in status.</p>
+        <p class="dim" id="who">${UI.who===null?"Checking sign-in status."
+          : UI.who ? "Signed in as "+h(UI.who)
+          : "Not signed in on this device."}</p>
       </div></div>
     <div class="card"><h2>Backup</h2>
       <div class="grid2" style="margin-top:12px"><button class="btn" data-export="1" style="margin-top:0">Export file</button>
@@ -993,7 +999,8 @@ document.addEventListener("click", async ev=>{
   if(d.askyes){ const a=UI.ask; UI.ask=null; if(a) doAct(a.act,a.arg); render(); return; }
   if(d.askno){ UI.ask=null; render(); return; }
 
-  if(d.tab){ UI.tab=d.tab; UI.pickFor=null; UI.histId=null; UI.exHist=null; UI.editing=false; UI.editRoutine=null; UI.tuneSlot=null; UI.focus=null; window.scrollTo(0,0); render(); return; }
+  if(d.tab){ if(d.tab==="settings" && S.cfg.url && S.cfg.key) refreshWho();
+    UI.tab=d.tab; UI.pickFor=null; UI.histId=null; UI.exHist=null; UI.editing=false; UI.editRoutine=null; UI.tuneSlot=null; UI.focus=null; window.scrollTo(0,0); render(); return; }
   if(d.openslot!=null && d.openslot!==""){ UI.openSlots[d.openslot]=!UI.openSlots[d.openslot]; render(); return; }
   if(d.exhist){ UI.exHist=d.exhist; UI.focus=null; window.scrollTo(0,0); render(); return; }
   if(d.closeex){ UI.exHist=null; window.scrollTo(0,0); render(); return; }
@@ -1206,12 +1213,7 @@ document.addEventListener("input", ev=>{
    BOOT
    ============================================================ */
 render();
-if(S.cfg.url && S.cfg.key){
-  pullRemote(true).then(()=>whoami()).then(em=>{
-    const el=document.getElementById("who");
-    if(el) el.textContent = em?"Signed in as "+em:"Not signed in on this device.";
-  });
-}
+if(S.cfg.url && S.cfg.key){ pullRemote(true).then(refreshWho); }
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(()=>{}); }
 </script>
 </body>
