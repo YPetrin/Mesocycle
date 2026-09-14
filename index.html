@@ -38,6 +38,19 @@ input::placeholder{color:var(--dim);font-weight:400}
 input:focus,select:focus,button:focus-visible{outline:1px solid var(--acc);outline-offset:2px}
 
 .wrap{max-width:540px;margin:0 auto;padding:4px var(--pad) 140px}
+.hero{position:relative;min-height:calc(100svh - 104px);display:flex;align-items:flex-end;
+  background-color:var(--bg);background-image:url("hero.jpg");
+  background-size:cover;background-position:center top;background-repeat:no-repeat}
+.heroshade{position:absolute;inset:0;
+  background:linear-gradient(180deg, rgba(12,12,13,.35) 0%, rgba(12,12,13,.05) 30%,
+    rgba(12,12,13,.6) 60%, rgba(12,12,13,.95) 78%, var(--bg) 90%)}
+.heroinner{position:relative;z-index:1;width:100%;max-width:540px;margin:0 auto;
+  padding:0 var(--pad) calc(34px + env(safe-area-inset-bottom))}
+.herobrand{font-size:13px;font-weight:700;letter-spacing:.2em;color:var(--acc);margin-bottom:14px}
+.quote{font-size:23px;font-weight:600;line-height:1.32;letter-spacing:-0.025em;margin:0 0 26px;
+  max-width:20ch;text-wrap:balance}
+.herocta .btn{margin-top:0}
+.herosub{font-size:13px;color:var(--mid);margin:10px 0 0;text-align:center}
 .nav{position:sticky;top:0;z-index:10;background:var(--bg);border-bottom:1px solid var(--line);
   padding-top:env(safe-area-inset-top);box-shadow:0 1px 0 rgba(255,255,255,.03) inset}
 .nav .brand{font-size:13px;font-weight:700;letter-spacing:.16em;color:var(--mid);padding:14px var(--pad) 0}
@@ -89,11 +102,12 @@ tr:last-child td{border-bottom:0}
 .setrow{margin:10px 0}
 .setrow input{padding:15px 6px;text-align:center;font-size:18px;font-weight:600}
 .setrow .idx{border:1px solid transparent;border-radius:4px;height:44px;color:var(--dim);font-size:14px;font-weight:500}
-.setrow .idx.warm{border-color:var(--line2);color:var(--mid);font-size:11px}
+.setrow .idx.warm,.setrow .idx.drop{border-color:var(--line2);color:var(--mid);font-size:11px}
 .setrow .tick{border:1px solid var(--line2);border-radius:5px;height:51px;font-size:14px;font-weight:500;
   background:var(--metal);box-shadow:0 1px 0 rgba(255,255,255,.05) inset}
-.setrow.done input{border-color:var(--line);color:var(--mid);background:#0f0f11;font-weight:500}
-.setrow.done .tick{background:#2f2f35;border-color:#4a4a52;color:var(--ink);font-weight:700}
+.setrow.done input{border-color:#4a4a52;color:var(--ink);background:#2b2b31;font-weight:600}
+.setrow.done .idx{color:var(--mid)}
+.setrow.done .tick{background:#3a3a42;border-color:#5a5a64;color:var(--ink);font-weight:700}
 .prev{grid-column:2 / 5;font-size:12px;color:var(--dim);text-align:center;margin:-2px 0 2px}
 .pb{font-size:10px;letter-spacing:.08em;color:var(--ink);background:#2f2f35;border:1px solid #4a4a52;
   border-radius:3px;padding:2px 7px;margin-left:7px;font-weight:700}
@@ -134,7 +148,9 @@ tr:last-child td{border-bottom:0}
 
 .clockbar{display:flex;align-items:baseline;gap:14px;width:100%}
 .clock{font-size:15px;font-weight:500;color:var(--mid);font-variant-numeric:tabular-nums}
-.hist{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding:16px 2px;width:100%;text-align:left}
+.histrow{display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line)}
+.hist{display:flex;justify-content:space-between;gap:12px;padding:16px 2px;flex:1;min-width:0;text-align:left}
+.histdel{flex:none;align-self:center}
 .hist strong{font-size:16px;font-weight:600}
 .hist .d{color:var(--dim);font-size:13px}
 .calwrap{padding:4px 0 20px;border-bottom:1px solid var(--line);margin-bottom:4px}
@@ -306,7 +322,7 @@ const exById = id => allEx().find(x=>x.id===id) || {id, name:"Removed exercise",
 /* ============================================================
    Atlas: routines, sessions, history
    ============================================================ */
-const BUILD="15";                 /* bump this and the CACHE name in sw.js together */
+const BUILD="20";                 /* bump this and the CACHE name in sw.js together */
 const BUILT="13 September 2026";
 const KEY="atlas.state.v3";
 let S = load() || fresh();
@@ -314,9 +330,9 @@ if(!S.program) S.program={name:"My routines", days:[], sessions:[], folders:[]};
 if(!S.program.folders) S.program.folders=[];
 if(!S.custom) S.custom=[];
 CUSTOM=S.custom;
-let UI = {tab:"home", wizard:null, toast:null, pickFor:null, draft:{}, histId:null, cal:null, calDay:null,
+let UI = {tab:"dash", wizard:null, toast:null, pickFor:null, draft:{}, histId:null, cal:null, calDay:null,
           search:"", newEx:null, exHist:null, editing:false, warmMark:{}, focus:null, ask:null,
-          newRoutine:null, openSlots:{}, editRoutine:null, orm:null, tuneSlot:null, diag:null, who:null, folder:null, newFolder:null, moveFor:null, volMuscle:"chest"};
+          newRoutine:null, openSlots:{}, editRoutine:null, orm:null, tuneSlot:null, diag:null, who:null, folder:null, newFolder:null, moveFor:null, volMuscle:"chest", staleOk:false};
 let tick=null;
 
 function fresh(){ return {v:3, program:null, active:null, custom:[], cfg:{url:"",key:"",email:""}, updated:0}; }
@@ -407,13 +423,25 @@ function exerciseHistory(exId){
   P().sessions.filter(s=>s.finished).forEach(s=>{
     (P().days[s.di]?P().days[s.di].slots:[]).forEach((slot,si)=>{
       if(slot.exId!==exId) return;
-      const sets=((s.entries||{})[si]||[]).filter(x=>!x.warm);
+      const sets=((s.entries||{})[si]||[]).filter(x=>!x.warm && !x.drop);
       if(sets.length) out.push({date:s.end||s.start, day:P().days[s.di].name, sets});
     });
   });
   return out.sort((a,b)=>new Date(a.date)-new Date(b.date));
 }
 const e1rm = s => s.w*(1+(s.r+(s.rir||0))/30);
+
+
+/* No suggestion. Just what you did last time on this exercise. */
+function lastEffort(di,si){
+  const prev=lastEntry(di,si, S.active?S.active.id:null);
+  if(!prev) return null;
+  const sets=(prev.entries[si]||[]).filter(x=>!x.warm && !x.drop);
+  if(!sets.length) return null;
+  const best=sets.reduce((a,b)=>(b.w*b.r > a.w*a.r ? b : a));
+  return {sets, best, when:prev.end||prev.start};
+}
+
 function round(x,inc){ return Math.round(x/inc)*inc; }
 
 
@@ -434,6 +462,9 @@ function restState(){
   const left=restLength()-Math.floor((Date.now()-new Date(last.t))/1000);
   return {left, running:left>0};
 }
+function hasDraft(si,i){
+  return ["w","r","rir"].some(f=>(UI.draft[si+"-"+i+"-"+f]||"")!=="");
+}
 const restLabel = r => !r ? "Log a set to start the rest clock" : r.running ? mmss(r.left) : "Rest over";
 const mmss = s => (s<0?"-":"")+Math.floor(Math.abs(s)/60)+":"+String(Math.abs(s)%60).padStart(2,"0");
 
@@ -447,18 +478,6 @@ async function holdScreen(on){
 
 const slotRange = (slot,ex) => (slot.rep && slot.rep.length===2) ? slot.rep : ex.rep;
 const slotInc = (slot,ex) => slot.inc || INC[ex.equip] || 2.5;
-function target(di,si){
-  const slot=P().days[di].slots[si], ex=exById(slot.exId), inc=slotInc(slot,ex), rng=slotRange(slot,ex);
-  const prevSess=lastEntry(di,si, S.active?S.active.id:null);
-  if(!prevSess) return {weight:null, reps:rng[0], note:"First time on this one. Find a weight you can hold for "+rng[0]+" to "+rng[1]+" reps."};
-  const arr=(prevSess.entries[si]||[]).filter(x=>!x.warm);
-  if(!arr.length) return {weight:null, reps:rng[0], note:"Only warm-ups logged last time."};
-  const best=arr[arr.length-1];
-  if(best.r>=rng[1])
-    return {weight:round(best.w+inc,inc), reps:rng[0], note:"You topped the rep range. Add weight, back to "+rng[0]+" reps."};
-  const bump=(best.rir||0)>=3 ? 2 : 1;
-  return {weight:round(best.w,inc), reps:Math.min(rng[1],best.r+bump), note:"Same weight, chase "+Math.min(rng[1],best.r+bump)+" reps."};
-}
 
 /* ============================================================
    SYNC (optional)
@@ -594,7 +613,7 @@ function focusBack(){
    RENDER
    ============================================================ */
 function navBar(){
-  const t=[["home","Routines"],["progress","Progress"],["history","History"],["info","Info"],["settings","Settings"]];
+  const t=[["dash","Home"],["home","Routines"],["progress","Progress"],["history","History"],["info","Info"],["settings","Settings"]];
   return `<div class="nav"><div class="brand">Atlas</div>
     <div class="row2">${t.map(([k,l])=>`<button data-tab="${k}" aria-pressed="${UI.tab===k && !UI.exHist}">${l}</button>`).join("")}</div></div>`;
 }
@@ -607,17 +626,72 @@ function render(){
   if(UI.moveFor!=null){ stopTick(); app.innerHTML=viewMove(); foot.innerHTML=askSheet(); return; }
   if(UI.tuneSlot){ stopTick(); app.innerHTML=viewTune(); foot.innerHTML=askSheet(); return; }
   if(UI.editRoutine!=null){ stopTick(); app.innerHTML=viewRoutineEditor(); foot.innerHTML=askSheet(); return; }
+  if(staleSession()){ stopTick(); app.innerHTML=viewStale(); foot.innerHTML=askSheet(); return; }
   if(S.active && !S.active.finishing){ app.innerHTML=viewSession(); foot.innerHTML=footSession()+askSheet(); startTick(); }
   else if(S.active){ stopTick(); app.innerHTML=viewFinish(); foot.innerHTML=footFinish()+askSheet(); }
   else{
     stopTick();
     app.innerHTML = navBar() + (UI.exHist ? viewExHistory()
-      : UI.tab==="home"?viewHome() : UI.tab==="progress"?viewProgress()
+      : UI.tab==="dash"?viewDash() : UI.tab==="home"?viewHome() : UI.tab==="progress"?viewProgress()
       : UI.tab==="history"?viewHistory() : UI.tab==="info"?viewInfo() : viewSettings());
     foot.innerHTML = askSheet();
     focusBack();
   }
   if(UI.toast) foot.insertAdjacentHTML("beforeend",`<div class="toast">${h(UI.toast)}</div>`);
+}
+
+/* ---------- Home ---------- */
+const QUOTES = [
+  "Everybody wants to be a bodybuilder, but nobody wants to lift no heavy-ass weights.",
+  "The last three or four reps is what makes the muscle grow.",
+  "The iron never lies to you.",
+  "Nobody cares how much you lifted last year.",
+  "Discipline is choosing between what you want now and what you want most.",
+  "You do not find willpower. You build it.",
+  "Train for the person you want to be at sixty.",
+  "The weight does not know how you feel today.",
+  "Turning up beaten is worth more than a perfect session you skipped.",
+  "Progress is boring. Do it anyway.",
+  "Everyone has a plan until the bar is on their back.",
+  "Small lifts, repeated, outlast big lifts, abandoned."
+];
+function quoteOfDay(){
+  const d=new Date(), n=Math.floor(d.getTime()/86400000);
+  return QUOTES[n % QUOTES.length];
+}
+
+/* The routine you are most likely to want next */
+function nextRoutine(){
+  const live=P().days.map((d,di)=>({d,di})).filter(x=>!x.d.hidden);
+  if(!live.length) return null;
+  const scored=live.map(x=>{
+    const last=lastSessionFor(x.di);
+    return {di:x.di, name:x.d.name, when:last&&last.end?new Date(last.end).getTime():0};
+  });
+  scored.sort((a,b)=>a.when-b.when);
+  return scored[0];
+}
+
+function viewDash(){
+  const a=S.active, nx=nextRoutine();
+  const label = a ? "Resume "+h((P().days[a.di]||{name:"session"}).name)
+    : nx ? "Start "+h(nx.name)
+    : "Create your first routine";
+  const action = a ? `data-staleresume="1"` : nx ? `data-start="${nx.di}"` : `data-newroutine=""`;
+  const sub = a ? "Started "+tstamp(a.start)
+    : nx ? (nx.when ? "Last done "+ago(new Date(nx.when).toISOString()) : "Not performed yet")
+    : "Nothing set up yet";
+  return `<div class="hero">
+    <div class="heroshade"></div>
+    <div class="heroinner">
+      <div class="herobrand">Atlas</div>
+      <p class="quote">${h(quoteOfDay())}</p>
+      <div class="herocta">
+        <button class="btn solid" ${action}>${label}</button>
+        <p class="herosub">${sub}</p>
+      </div>
+    </div>
+  </div>`;
 }
 
 /* ---------- Routines ---------- */
@@ -727,6 +801,8 @@ function viewRoutineEditor(){
       ${live.map(({s,si})=>`<tr><td>${h(exById(s.exId).name)}<div class="dim">${h(M[s.muscle].name)}</div>
         ${s.note?`<div class="dim" style="margin-top:4px">${h(s.note)}</div>`:""}
         <div class="row" style="flex-wrap:wrap;margin-top:8px">
+          <button class="pill" data-moveex="${di}-${si}-up" aria-label="Move up">&uarr;</button>
+          <button class="pill" data-moveex="${di}-${si}-down" aria-label="Move down">&darr;</button>
           <button class="pill" data-exhist="${h(s.exId)}">History</button>
           <button class="pill" data-swap="${di}-${si}">Swap</button>
           <button class="pill" data-tune="${di}-${si}">Tune</button>
@@ -768,6 +844,29 @@ function viewTune(){
   </div></div>`;
 }
 
+/* A session left open overnight is almost always one you forgot to finish */
+function staleSession(){
+  const a=S.active;
+  if(!a || UI.staleOk) return false;
+  return (Date.now()-new Date(a.start))/3600000 > 6;
+}
+function viewStale(){
+  const a=S.active, v=sessionVolume(a);
+  return `<div class="nav"><div class="brand">Atlas</div></div>
+  <div class="top"><h1>Unfinished session</h1></div>
+  <div class="wrap">
+    <div class="card">
+      <div class="row sb"><span class="dim">Routine</span><strong>${h((P().days[a.di]||{name:"Deleted routine"}).name)}</strong></div>
+      <div class="row sb" style="margin-top:8px"><span class="dim">Started</span><strong>${dstamp(a.start)} ${tstamp(a.start)}</strong></div>
+      <div class="row sb" style="margin-top:8px"><span class="dim">Logged</span><strong>${v.sets} sets, ${v.volume.toLocaleString()} kg</strong></div>
+      <p class="metaline">Open since ${ago(a.start)}. Anything you log now would be attached to it.</p>
+    </div>
+    <button class="btn solid" data-stalefinish="1">Finish and save it</button>
+    <button class="btn" data-staleresume="1">Carry on with it</button>
+    <button class="btn" data-stalediscard="1" style="border-color:var(--red);color:var(--red)">Discard it</button>
+  </div>`;
+}
+
 /* ---------- Session ---------- */
 function viewSession(){
   const a=S.active, di=a.di, day=P().days[di];
@@ -775,31 +874,31 @@ function viewSession(){
   day.slots.forEach((slot,si)=>{
     const sets=plannedSets(di,si);
     if(slot.hidden || sets<=0) return;
-    const ex=exById(slot.exId), t=target(di,si);
+    const ex=exById(slot.exId), eff=lastEffort(di,si), rng=slotRange(slot, ex);
     const log=a.entries[si]||[];
-    const warmCount=log.filter(x=>x.warm).length;
-    const working=log.length-warmCount;
+    const extras=log.filter(x=>x.warm||x.drop).length;
+    const working=log.length-extras;
     if(working>=sets && !UI.openSlots[si]){
-      const w=log.filter(x=>!x.warm);
-      const summary=w.length?`${fmt(w[w.length-1].w)} kg &times; ${w.map(x=>x.r).join(", ")}`:"warm-ups only";
+      const w2=log.filter(x=>!x.warm && !x.drop);
+      const summary=w2.length?`${fmt(w2[w2.length-1].w)} kg &times; ${w2.map(x=>x.r).join(", ")}`:"warm-ups only";
       body+=`<button class="done-line" data-openslot="${si}"><span class="nm">${h(ex.name)}</span><span class="vals">${summary}</span></button>`;
       return;
     }
-    const prevSess=lastEntry(di,si,a.id), prev=prevSess?(prevSess.entries[si]||[]).filter(x=>!x.warm):null;
+    const prev=eff?eff.sets:null;
     let rows="";
-    for(let i=0;i<Math.max(sets+warmCount, log.length);i++){
+    for(let i=0;i<Math.max(sets+extras, log.length);i++){
       const s=log[i], done=!!s, p=prev&&prev[i];
       const carry=(!done && i>0 && log[i-1])?log[i-1]:null;
-      const phW=carry?fmt(carry.w):(t.weight!=null?fmt(t.weight):"kg");
-      const phR=carry?carry.r:t.reps;
-      const warm=(s&&s.warm)||UI.warmMark[si+"-"+i];
+      const phW=carry?fmt(carry.w):"kg";
+      const phR=carry?carry.r:"reps";
+      const mark = s ? (s.warm?"warm":s.drop?"drop":"") : (UI.warmMark[si+"-"+i]||"");
       rows+=`${p?`<div class="setgrid"><span></span><div class="prev">last time ${fmt(p.w)} kg &times; ${p.r}${p.rir!=null?" @ "+p.rir+" RIR":""}</div><span></span></div>`:""}
       <div class="setrow ${done?"done":""}">
-        <button class="idx ${warm?"warm":""}" data-warm="${si}-${i}" aria-label="Mark set ${i+1} as a warm-up">${warm?"W":i+1}</button>
+        <button class="idx ${mark?mark:""}" data-warm="${si}-${i}" aria-label="Set ${i+1} type">${mark==="warm"?"W":mark==="drop"?"D":i+1}</button>
         <input inputmode="decimal" data-in="w" data-si="${si}" data-i="${i}" value="${done?fmt(s.w):h(UI.draft[si+"-"+i+"-w"]||"")}" placeholder="${phW}" aria-label="Weight set ${i+1}">
         <input inputmode="numeric" data-in="r" data-si="${si}" data-i="${i}" value="${done?s.r:h(UI.draft[si+"-"+i+"-r"]||"")}" placeholder="${phR}" aria-label="Reps set ${i+1}">
-        <input inputmode="numeric" data-in="rir" data-si="${si}" data-i="${i}" value="${done?(s.rir==null?"":s.rir):h(UI.draft[si+"-"+i+"-rir"]||"")}" placeholder="RIR" aria-label="Reps in reserve set ${i+1}">
-        <button class="tick" data-logset="${si}" data-i="${i}">${done?"&check;":"Log"}</button>
+        <input inputmode="numeric" data-in="rir" data-si="${si}" data-i="${i}" value="${done?(s.rir==null?"":s.rir):h(UI.draft[si+"-"+i+"-rir"]||"")}" placeholder="rir" aria-label="Reps in reserve set ${i+1}">
+        <button class="tick" data-logset="${si}" data-i="${i}">${done?"&check;":(i>=sets+extras&&!hasDraft(si,i))?"&times;":"Log"}</button>
       </div>${done && !s.warm && p && (s.w*s.r > p.w*p.r)?`<div class="metaline" style="margin:-2px 0 6px">Better than last time<span class="pb">PB</span></div>`:""}`;
     }
     body+=`<div class="card">
@@ -807,9 +906,13 @@ function viewSession(){
       <div class="row sb"><button style="text-align:left" data-exhist="${h(slot.exId)}"><h2>${h(ex.name)}</h2></button>
         <button class="pill" data-swap="${di}-${si}">Swap</button></div>
       <div class="row" style="align-items:baseline;gap:12px;margin-top:10px">
-        <span class="big">${t.weight!=null?fmt(t.weight):"&mdash;"}</span><span class="muted">kg &times; ${t.reps} reps</span></div>
+        <span class="big">${eff?fmt(eff.best.w):"&mdash;"}</span>
+        <span class="muted">${eff?"kg &times; "+eff.best.r+" reps":"nothing logged yet"}</span></div>
       ${slot.note?`<div class="metaline" style="color:var(--mid)">${h(slot.note)}</div>`:""}
-      <div class="metaline">${h(t.note)} Target ${sets} working ${sets===1?"set":"sets"}${warmCount?", plus "+warmCount+" warm-up"+(warmCount>1?"s":""):""}.</div>
+      <div class="metaline">${eff
+        ? "Best set last time, "+ago(eff.when)+". Whole session: "+eff.sets.map(x=>fmt(x.w)+"&times;"+x.r).join(", ")+"."
+        : "Rep range "+rng[0]+" to "+rng[1]+"."}
+        Target ${sets} working ${sets===1?"set":"sets"}${extras?", plus "+extras+" marked warm-up or drop":""}.</div>
       <div class="setgrid" style="margin-top:14px"><span></span>
         <span class="dim" style="text-align:center">kg</span><span class="dim" style="text-align:center">reps</span>
         <span class="dim" style="text-align:center">RIR</span><span></span></div>
@@ -858,10 +961,13 @@ function footFinish(){
 /* ---------- History ---------- */
 function sessionRow(s){
   const v=sessionVolume(s), day=P().days[s.di];
-  return `<button class="hist" data-hist="${h(s.id)}">
-    <span><strong>${h(day?day.name:"Deleted routine")}</strong>${s.rating!=null?`<span class="d"> ${h(RATING[s.rating])}</span>`:""}
-    <div class="d">${v.sets} sets, ${v.volume.toLocaleString()} kg${s.start&&s.end?", "+dur(new Date(s.end)-new Date(s.start)):""}</div></span>
-    <span class="d">${s.end?dstamp(s.end):""}</span></button>`;
+  return `<div class="histrow">
+    <button class="hist" data-hist="${h(s.id)}">
+      <span><strong>${h(day?day.name:"Deleted routine")}</strong>${s.rating!=null?`<span class="d"> ${h(RATING[s.rating])}</span>`:""}
+      <div class="d">${v.sets} sets, ${v.volume.toLocaleString()} kg${s.start&&s.end?", "+dur(new Date(s.end)-new Date(s.start)):""}</div></span>
+      <span class="d">${s.end?dstamp(s.end):""}</span></button>
+    <button class="pill histdel" data-delsession="${h(s.id)}" aria-label="Delete this session">Delete</button>
+  </div>`;
 }
 function viewCalendar(sessions){
   const now=new Date();
@@ -914,14 +1020,14 @@ function viewHistory(){
           <div class="setgrid"><span></span><span class="dim" style="text-align:center">kg</span>
           <span class="dim" style="text-align:center">reps</span><span class="dim" style="text-align:center">RIR</span><span></span></div>
           ${a.map((x,i)=>`<div class="setrow">
-            <button class="idx ${x.warm?"warm":""}" data-ewarm="${si}-${i}">${x.warm?"W":i+1}</button>
+            <button class="idx ${x.warm||x.drop?"warm":""}" data-ewarm="${si}-${i}">${x.warm?"W":x.drop?"D":i+1}</button>
             <input inputmode="decimal" data-e="w" data-si="${si}" data-i="${i}" value="${fmt(x.w)}" aria-label="Weight set ${i+1}">
             <input inputmode="numeric" data-e="r" data-si="${si}" data-i="${i}" value="${x.r}" aria-label="Reps set ${i+1}">
             <input inputmode="numeric" data-e="rir" data-si="${si}" data-i="${i}" value="${x.rir==null?"":x.rir}" aria-label="Reps in reserve set ${i+1}">
             <button class="tick" data-edrop="${si}-${i}" aria-label="Delete set ${i+1}">&times;</button></div>`).join("")}</div>`;
         const rests=restMap(s);
         return `<div class="card"><button style="text-align:left" data-exhist="${h(slot.exId)}"><h2>${h(exById(slot.exId).name)}</h2></button>
-          <table><tbody>${a.map((x,i)=>`<tr><td class="dim">${x.warm?"Warm-up":"Set "+(i+1)}${rests[si+"-"+i]?`<div class="dim">rest ${gap(rests[si+"-"+i])}</div>`:""}</td>
+          <table><tbody>${a.map((x,i)=>`<tr><td class="dim">${x.warm?"Warm-up":x.drop?"Drop set":"Set "+(i+1)}${rests[si+"-"+i]?`<div class="dim">rest ${gap(rests[si+"-"+i])}</div>`:""}</td>
             <td class="n">${fmt(x.w)} kg &times; ${x.r}${x.rir!=null&&x.rir!==""?" @ "+x.rir+" RIR":""}</td></tr>`).join("")}</tbody></table></div>`;
       }).join("")}
       ${UI.editing?`<div class="card"><h2>How was it</h2><div class="faces">${RATING.map((t,i)=>`<button class="facebtn" data-erate="${i}" aria-pressed="${s.rating===i}" aria-label="${t}">${face(i,s.rating===i)}</button>`).join("")}</div></div>
@@ -970,8 +1076,13 @@ function viewExHistory(){
 
 /* ---------- Pickers ---------- */
 function exOption(x, sel){
-  return `<button class="opt" data-pick="${x.id}" aria-pressed="${sel}">
-    <span class="k">${h(x.name)}</span><span class="d">${h(x.equip)}, ${x.rep[0]} to ${x.rep[1]} reps${x.id.startsWith("c")?", yours":""}</span></button>`;
+  const mine=x.id.startsWith("c");
+  const main=`<button class="opt" data-pick="${x.id}" aria-pressed="${sel}" style="${mine?"border-bottom-left-radius:0;border-bottom-right-radius:0":""}">
+    <span class="k">${h(x.name)}</span><span class="d">${h(x.equip)}, ${x.rep[0]} to ${x.rep[1]} reps${mine?", yours":""}</span></button>`;
+  if(!mine) return main;
+  return main+`<div class="row" style="gap:8px;margin:-8px 0 4px">
+    <button class="pill" data-editex="${x.id}">Edit</button>
+    <button class="pill" data-delex="${x.id}">Delete</button></div>`;
 }
 function viewPicker(){
   const adding=UI.pickFor.startsWith("add-");
@@ -1000,7 +1111,7 @@ function viewPicker(){
 function viewNewEx(){
   const n=UI.newEx;
   return `<div class="nav"><div class="brand">Atlas</div></div>
-  <div class="top"><h1>Create an exercise</h1></div>
+  <div class="top"><h1>${n.id?"Edit exercise":"Create an exercise"}</h1></div>
   <div class="wrap"><div class="card stack">
     <div><label class="f">Name</label><input id="nxname" value="${h(n.name||"")}" placeholder="Plate loaded chest press"></div>
     <div><label class="f">Muscle</label><select id="nxmuscle">${MK.map(mk=>`<option value="${mk}" ${n.muscle===mk?"selected":""}>${h(M[mk].name)}</option>`).join("")}</select></div>
@@ -1009,6 +1120,7 @@ function viewNewEx(){
       <div><label class="f">Lowest reps</label><input id="nxlo" inputmode="numeric" value="${n.lo||8}"></div>
       <div><label class="f">Highest reps</label><input id="nxhi" inputmode="numeric" value="${n.hi||12}"></div></div>
     <button class="btn solid" data-savenewex="1">Save exercise</button>
+    ${n.id?`<button class="btn" data-delex="${h(n.id)}" style="border-color:var(--red);color:var(--red)">Delete exercise</button>`:""}
     <button class="btn" data-cancelnewex="1">Cancel</button>
   </div></div>`;
 }
@@ -1170,7 +1282,7 @@ function viewInfo(){
         <tr><td>Cutting sets</td><td>Still sore on the day, joints aching, or performance dropping two sessions running. Cut a set or take a lighter week.</td></tr>
         <tr><td>Lighter weeks</td><td>Every four to six hard weeks, halve your sets and drop the load by about forty per cent for a week. Nothing in Atlas forces this, so diarise it.</td></tr>
         <tr><td>Rep ranges</td><td>Six to ten on the heavy compounds, ten to fifteen on machines and isolation. Growth happens across the range when sets are taken close to failure.</td></tr>
-        <tr><td>Warm-ups</td><td>Mark them with the set number button. They stay out of your volume and out of the comparison against last time.</td></tr>
+        <tr><td>Set types</td><td>Tap the set number to cycle it through working, warm-up and drop. Warm-ups stay out of your volume and out of comparisons. Drop sets count toward volume but not toward the exercise target.</td></tr>
       </tbody></table>
     </div>
   </div>`;
@@ -1220,8 +1332,12 @@ function viewSettings(){
    ============================================================ */
 function doAct(act, arg){
   const p=P();
-  if(act==="discard"){ S.active=null; UI.draft={}; UI.warmMark={}; UI.openSlots={}; save(); toast("Session discarded."); return; }
+  if(act==="discard"){ S.active=null; UI.draft={}; UI.warmMark={}; UI.openSlots={}; UI.staleOk=false; save(); toast("Session discarded."); return; }
   if(act==="removeex"){ const [di,si]=arg.split("-").map(Number); p.days[di].slots[si].hidden=true; save(); return; }
+  if(act==="delex"){
+    S.custom=S.custom.filter(x=>x.id!==arg); syncCustom();
+    UI.newEx=null; save(); toast("Exercise deleted."); return;
+  }
   if(act==="delfolder"){
     p.days.forEach(day=>{ if(day.folder===arg) day.folder=null; });
     p.folders=p.folders.filter(f=>f.id!==arg);
@@ -1299,6 +1415,26 @@ document.addEventListener("click", async ev=>{
     }
     UI.newRoutine=null; UI.focus=null; save(); render(); return;
   }
+  if(d.moveex){
+    const [di,si,dir]=d.moveex.split("-");
+    const day=P().days[+di], i=+si, j = dir==="up" ? i-1 : i+1;
+    if(j<0 || j>=day.slots.length){ toast(dir==="up"?"Already first.":"Already last."); return; }
+    const t=day.slots[i]; day.slots[i]=day.slots[j]; day.slots[j]=t;
+    /* logged sets are keyed by position, so swap them in every session too */
+    P().sessions.forEach(s=>{
+      if(s.di!==+di || !s.entries) return;
+      const a=s.entries[i], b2=s.entries[j];
+      if(a===undefined && b2===undefined) return;
+      if(b2===undefined) delete s.entries[i]; else s.entries[i]=b2;
+      if(a===undefined) delete s.entries[j]; else s.entries[j]=a;
+    });
+    if(S.active && S.active.di===+di && S.active.entries){
+      const a=S.active.entries[i], b2=S.active.entries[j];
+      if(b2===undefined) delete S.active.entries[i]; else S.active.entries[i]=b2;
+      if(a===undefined) delete S.active.entries[j]; else S.active.entries[j]=a;
+    }
+    save(); render(); return;
+  }
   if(d.tune){ UI.tuneSlot=d.tune; window.scrollTo(0,0); render(); return; }
   if(d.canceltune){ UI.tuneSlot=null; render(); return; }
   if(d.savetune){
@@ -1349,37 +1485,79 @@ document.addEventListener("click", async ev=>{
     const name=$("#nxname").value.trim();
     if(!name){ toast("Give it a name."); return; }
     const lo=parseInt($("#nxlo").value,10)||8, hi=parseInt($("#nxhi").value,10)||12;
-    S.custom.push({id:"c"+Date.now(), name, muscle:$("#nxmuscle").value, equip:$("#nxequip").value, rep:[Math.min(lo,hi),Math.max(lo,hi)], fav:true});
+    const body={name, muscle:$("#nxmuscle").value, equip:$("#nxequip").value, rep:[Math.min(lo,hi),Math.max(lo,hi)], fav:true};
+    if(UI.newEx.id){ Object.assign(S.custom.find(x=>x.id===UI.newEx.id), body); }
+    else S.custom.push(Object.assign({id:"c"+Date.now()}, body));
     syncCustom(); UI.newEx=null; UI.search=name; save(); render(); toast("Exercise saved."); return;
+  }
+  if(d.editex){
+    const x=S.custom.find(y=>y.id===d.editex);
+    if(x) UI.newEx={id:x.id, name:x.name, muscle:x.muscle, equip:x.equip, lo:x.rep[0], hi:x.rep[1]};
+    render(); return;
+  }
+  if(d.delex){
+    const inUse=P().days.some(day=>day.slots.some(s=>!s.hidden && s.exId===d.delex));
+    ask(inUse
+      ? "That exercise is used in a routine. Delete it anyway? The routine keeps the slot, labelled as removed."
+      : "Delete this exercise? Past sessions keep their records.", "delex", d.delex, true);
+    return;
   }
 
   /* session */
   if(d.start!=null && d.start!==""){
     const di=+d.start;
     S.active={id:"s"+Date.now(), di, start:new Date().toISOString(), entries:{}, rating:null, finished:false, finishing:false};
-    UI.draft={}; UI.warmMark={}; UI.openSlots={}; save(); window.scrollTo(0,0); render(); return;
+    UI.draft={}; UI.warmMark={}; UI.openSlots={}; UI.staleOk=false; save(); window.scrollTo(0,0); render(); return;
   }
   if(d.logset!=null && d.logset!==""){
     const si=+d.logset, i=+d.i, a=S.active;
     const row=b.closest(".setrow"), g=n=>row.querySelector('[data-in="'+n+'"]');
     const lg=a.entries[si]||(a.entries[si]=[]);
-    if(lg[i]){ lg.splice(i,1); save(); render(); return; }
+    if(lg[i]){
+      /* unlock for editing, keeping what you typed */
+      const s=lg[i];
+      UI.draft[si+"-"+i+"-w"]=fmt(s.w);
+      UI.draft[si+"-"+i+"-r"]=String(s.r);
+      UI.draft[si+"-"+i+"-rir"]=s.rir==null?"":String(s.rir);
+      if(s.warm) UI.warmMark[si+"-"+i]="warm"; else if(s.drop) UI.warmMark[si+"-"+i]="drop";
+      lg.splice(i,1);
+      save(); render(); return;
+    }
+    if(b.textContent.trim()==="\u00d7"){
+      const slot=P().days[a.di].slots[si];
+      if(slot.sets>0) slot.sets--;
+      ["w","r","rir"].forEach(f=>delete UI.draft[si+"-"+i+"-"+f]);
+      save(); render(); return;
+    }
     const w=parseFloat(g("w").value||g("w").placeholder);
     const r=parseInt(g("r").value||g("r").placeholder,10);
     const rirRaw=g("rir").value;
     if(isNaN(w)||isNaN(r)){ toast("Enter a weight and reps."); return; }
     lg[i]={w, r, rir:rirRaw===""?null:parseInt(rirRaw,10), t:new Date().toISOString()};
-    if(UI.warmMark[si+"-"+i]){ lg[i].warm=true; delete UI.warmMark[si+"-"+i]; }
+    const mk=UI.warmMark[si+"-"+i];
+    if(mk==="warm") lg[i].warm=true; else if(mk==="drop") lg[i].drop=true;
+    delete UI.warmMark[si+"-"+i];
     ["w","r","rir"].forEach(f=>delete UI.draft[si+"-"+i+"-"+f]);
     save(); render(); return;
   }
   if(d.addset!=null && d.addset!==""){ P().days[S.active.di].slots[+d.addset].sets++; save(); render(); return; }
   if(d.warm){
     const [si,i]=d.warm.split("-").map(Number), lg=S.active.entries[si]||[];
-    if(lg[i]) lg[i].warm=!lg[i].warm;
-    else UI.warmMark[si+"-"+i]=!UI.warmMark[si+"-"+i];
+    const next=cur=>cur===""?"warm":cur==="warm"?"drop":"";
+    if(lg[i]){
+      const cur=lg[i].warm?"warm":lg[i].drop?"drop":"", n=next(cur);
+      delete lg[i].warm; delete lg[i].drop;
+      if(n==="warm") lg[i].warm=true; else if(n==="drop") lg[i].drop=true;
+    } else {
+      const k=si+"-"+i;
+      UI.warmMark[k]=next(UI.warmMark[k]||"");
+      if(!UI.warmMark[k]) delete UI.warmMark[k];
+    }
     save(); render(); return;
   }
+  if(d.staleresume){ UI.staleOk=true; render(); return; }
+  if(d.stalefinish){ UI.staleOk=true; S.active.finishing=true; save(); render(); return; }
+  if(d.stalediscard){ ask("Discard that unfinished session? Nothing is saved.", "discard", null, true); return; }
   if(d.finishsession){ S.active.finishing=true; window.scrollTo(0,0); save(); render(); return; }
   if(d.backtosession){ S.active.finishing=false; window.scrollTo(0,0); render(); return; }
   if(d.discard){ ask("Discard this session? Nothing is saved.", "discard", null, true); return; }
@@ -1389,11 +1567,12 @@ document.addEventListener("click", async ev=>{
     if(!Object.values(a.entries).some(x=>x.length)){ toast("Nothing logged. Discard instead."); return; }
     const nf=$("#snote"); if(nf) a.note=nf.value.trim();
     a.end=new Date().toISOString(); a.finished=true; delete a.finishing;
-    P().sessions.push(a); S.active=null; UI.draft={}; UI.warmMark={}; UI.openSlots={}; UI.tab="home";
+    P().sessions.push(a); S.active=null; UI.draft={}; UI.warmMark={}; UI.openSlots={}; UI.staleOk=false; UI.tab="home";
     save(); window.scrollTo(0,0); render(); toast("Session saved."); return;
   }
 
   /* history */
+  if(d.delsession){ ask("Delete this session? It cannot be recovered.", "delsession", d.delsession, true); return; }
   if(d.hist){ UI.histId=d.hist; window.scrollTo(0,0); render(); return; }
   if(d.closehist){ UI.histId=null; UI.editing=false; render(); return; }
   if(d.cal){ const c=UI.cal, n=c.m+(+d.cal); UI.cal={y:c.y+Math.floor(n/12), m:((n%12)+12)%12}; render(); return; }
@@ -1404,7 +1583,12 @@ document.addEventListener("click", async ev=>{
   if(d.erate){ const s=P().sessions.find(x=>x.id===UI.histId); if(s){ s.rating=+d.erate; save(); render(); } return; }
   if(d.ewarm){
     const [si,i]=d.ewarm.split("-").map(Number), s=P().sessions.find(x=>x.id===UI.histId);
-    if(s&&s.entries[si]&&s.entries[si][i]){ s.entries[si][i].warm=!s.entries[si][i].warm; save(); render(); }
+    if(s&&s.entries[si]&&s.entries[si][i]){
+      const x=s.entries[si][i], cur=x.warm?"warm":x.drop?"drop":"";
+      delete x.warm; delete x.drop;
+      if(cur==="") x.warm=true; else if(cur==="warm") x.drop=true;
+      save(); render();
+    }
     return;
   }
   if(d.edrop){
@@ -1459,13 +1643,14 @@ document.addEventListener("click", async ev=>{
   }
   if(d.import){ $("#importfile").click(); return; }
   if(d.csv){
-    const rows=[["date","time","routine","exercise","set","warm_up","kg","reps","rir","session_rating"]];
+    const rows=[["date","time","routine","exercise","set","type","kg","reps","rir","session_rating"]];
     P().sessions.filter(x=>x.finished).forEach(s=>{
       const day=P().days[s.di]; if(!day) return;
       Object.keys(s.entries||{}).forEach(si=>{
         const slot=day.slots[si]; if(!slot) return;
         (s.entries[si]||[]).forEach((x,i)=>rows.push([dkey(s.end||s.start), tstamp(s.start||s.end), day.name,
-          exById(slot.exId).name, i+1, x.warm?"yes":"no", x.w, x.r, x.rir==null?"":x.rir, s.rating!=null?RATING[s.rating]:""]));
+          exById(slot.exId).name, i+1, x.warm?"warm-up":x.drop?"drop":"working", x.w, x.r, x.rir==null?"":x.rir,
+          s.rating!=null?RATING[s.rating]:""]));
       });
     });
     const csv=rows.map(r=>r.map(c=>/[",]/.test(String(c))?'"'+String(c).replace(/"/g,'""')+'"':c).join(",")).join("\n");

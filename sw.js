@@ -1,8 +1,13 @@
-const CACHE = "atlas-v15";
-const FILES = ["./", "./index.html", "./manifest.json", "./icon.svg"];
+const CACHE = "atlas-v20";
+const CORE = ["./", "./index.html", "./manifest.json", "./icon.svg"];
+const EXTRA = ["./hero.jpg"];                            // optional, missing is fine
 
 self.addEventListener("install", e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
+  e.waitUntil(
+    caches.open(CACHE)
+      .then(c => c.addAll(CORE).then(() => Promise.all(EXTRA.map(u => c.add(u).catch(() => null)))))
+      .then(() => self.skipWaiting())
+  );
 });
 self.addEventListener("activate", e => {
   e.waitUntil(
@@ -13,9 +18,8 @@ self.addEventListener("activate", e => {
 });
 self.addEventListener("fetch", e => {
   const url = new URL(e.request.url);
-  if (url.origin !== location.origin) return;            // never touch Supabase or the font CDN
+  if (url.origin !== location.origin) return;
 
-  // The page itself always comes from the network when there is one, bypassing the HTTP cache.
   const isPage = e.request.mode === "navigate" || url.pathname.endsWith("index.html") || url.pathname.endsWith("/");
   if (isPage) {
     e.respondWith(
