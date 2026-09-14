@@ -58,6 +58,7 @@ input:focus,select:focus,button:focus-visible{outline:1px solid var(--acc);outli
 .nav .row2 button{padding:8px 0 11px;font-size:14px;font-weight:500;color:var(--dim);
   border-bottom:2px solid transparent;white-space:nowrap}
 .nav .row2 button[aria-pressed="true"]{color:var(--ink);border-bottom-color:var(--acc)}
+.nav .row2 .cog{margin-left:auto;padding-left:14px;display:flex;align-items:center}
 .top{padding:26px var(--pad) 8px;max-width:540px;margin:0 auto;display:flex;align-items:baseline;gap:12px}
 .top .sub{color:var(--dim);font-size:12px;margin-left:auto;text-align:right;line-height:1.4}
 
@@ -174,7 +175,10 @@ tr:last-child td{border-bottom:0}
 .step{display:flex;align-items:center;gap:10px;justify-content:flex-end}
 .step button{border:1px solid var(--line2);border-radius:4px;width:36px;height:36px;font-size:18px;line-height:1;background:var(--metal)}
 .step .v{min-width:22px;text-align:center;font-size:17px;font-weight:600}
-.chart{width:100%;height:140px;margin-top:14px}
+.chart{width:100%;height:auto;aspect-ratio:320/150;margin-top:14px;display:block}
+.statline{display:flex;align-items:baseline;gap:10px;margin-top:10px}
+.stat{font-size:34px;font-weight:700;letter-spacing:-0.04em;line-height:1}
+.statsub{font-size:13px;color:var(--dim)}
 .search{margin-bottom:12px}
 .empty{border:1px solid var(--line);border-radius:4px;padding:34px 20px;margin:14px 0;text-align:center;background:var(--surface)}
 .empty p{color:var(--mid);margin:8px 0 18px}
@@ -322,7 +326,7 @@ const exById = id => allEx().find(x=>x.id===id) || {id, name:"Removed exercise",
 /* ============================================================
    Atlas: routines, sessions, history
    ============================================================ */
-const BUILD="20";                 /* bump this and the CACHE name in sw.js together */
+const BUILD="22";                 /* bump this and the CACHE name in sw.js together */
 const BUILT="13 September 2026";
 const KEY="atlas.state.v3";
 let S = load() || fresh();
@@ -612,10 +616,15 @@ function focusBack(){
 /* ============================================================
    RENDER
    ============================================================ */
+const COG = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"
+  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/>
+  <path d="M19.4 15a1.6 1.6 0 0 0 .32 1.77l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.6 1.6 0 0 0-1.77-.32 1.6 1.6 0 0 0-1 1.47V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1.05-1.47 1.6 1.6 0 0 0-1.77.32l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.6 1.6 0 0 0 4.6 15a1.6 1.6 0 0 0-1.47-1H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.32-1.77l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.6 1.6 0 0 0 9 4.6a1.6 1.6 0 0 0 1-1.47V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.47 1.6 1.6 0 0 0 1.77-.32l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.6 1.6 0 0 0 19.4 9v.02a1.6 1.6 0 0 0 1.47 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>`;
 function navBar(){
-  const t=[["dash","Home"],["home","Routines"],["progress","Progress"],["history","History"],["info","Info"],["settings","Settings"]];
+  const t=[["dash","Home"],["home","Routines"],["progress","Progress"],["history","History"],["info","Info"]];
   return `<div class="nav"><div class="brand">Atlas</div>
-    <div class="row2">${t.map(([k,l])=>`<button data-tab="${k}" aria-pressed="${UI.tab===k && !UI.exHist}">${l}</button>`).join("")}</div></div>`;
+    <div class="row2">${t.map(([k,l])=>`<button data-tab="${k}" aria-pressed="${UI.tab===k && !UI.exHist}">${l}</button>`).join("")}
+      <button class="cog" data-tab="settings" aria-pressed="${UI.tab==="settings" && !UI.exHist}" aria-label="Settings" title="Settings">${COG}</button>
+    </div></div>`;
 }
 function render(){
   const app=$("#app"), foot=$("#foot");
@@ -868,10 +877,18 @@ function viewStale(){
 }
 
 /* ---------- Session ---------- */
+function sessionOrder(a, day){
+  const base=day.slots.map((_,i)=>i);
+  if(!a.order) return base;
+  const kept=a.order.filter(i=>i<day.slots.length);
+  return kept.concat(base.filter(i=>!kept.includes(i)));
+}
 function viewSession(){
   const a=S.active, di=a.di, day=P().days[di];
+  const order=sessionOrder(a, day);
   let body="";
-  day.slots.forEach((slot,si)=>{
+  order.forEach((si, pos)=>{
+    const slot=day.slots[si];
     const sets=plannedSets(di,si);
     if(slot.hidden || sets<=0) return;
     const ex=exById(slot.exId), eff=lastEffort(di,si), rng=slotRange(slot, ex);
@@ -897,14 +914,17 @@ function viewSession(){
         <button class="idx ${mark?mark:""}" data-warm="${si}-${i}" aria-label="Set ${i+1} type">${mark==="warm"?"W":mark==="drop"?"D":i+1}</button>
         <input inputmode="decimal" data-in="w" data-si="${si}" data-i="${i}" value="${done?fmt(s.w):h(UI.draft[si+"-"+i+"-w"]||"")}" placeholder="${phW}" aria-label="Weight set ${i+1}">
         <input inputmode="numeric" data-in="r" data-si="${si}" data-i="${i}" value="${done?s.r:h(UI.draft[si+"-"+i+"-r"]||"")}" placeholder="${phR}" aria-label="Reps set ${i+1}">
-        <input inputmode="numeric" data-in="rir" data-si="${si}" data-i="${i}" value="${done?(s.rir==null?"":s.rir):h(UI.draft[si+"-"+i+"-rir"]||"")}" placeholder="rir" aria-label="Reps in reserve set ${i+1}">
+        <input inputmode="numeric" data-in="rir" data-si="${si}" data-i="${i}" value="${done?(s.rir==null?"":s.rir):h(UI.draft[si+"-"+i+"-rir"]||"")}" placeholder="RIR" aria-label="Reps in reserve set ${i+1}">
         <button class="tick" data-logset="${si}" data-i="${i}">${done?"&check;":(i>=sets+extras&&!hasDraft(si,i))?"&times;":"Log"}</button>
       </div>${done && !s.warm && p && (s.w*s.r > p.w*p.r)?`<div class="metaline" style="margin:-2px 0 6px">Better than last time<span class="pb">PB</span></div>`:""}`;
     }
     body+=`<div class="card">
       ${slot.ss?`<div class="sslabel">Superset with ${h(exById(day.slots[si-1].exId).name)}</div>`:""}
       <div class="row sb"><button style="text-align:left" data-exhist="${h(slot.exId)}"><h2>${h(ex.name)}</h2></button>
-        <button class="pill" data-swap="${di}-${si}">Swap</button></div>
+        <span class="row" style="gap:6px">
+          <button class="pill" data-sessmove="${si}-up" aria-label="Move earlier in this session">&uarr;</button>
+          <button class="pill" data-sessmove="${si}-down" aria-label="Move later in this session">&darr;</button>
+          <button class="pill" data-swap="${di}-${si}">Swap</button></span></div>
       <div class="row" style="align-items:baseline;gap:12px;margin-top:10px">
         <span class="big">${eff?fmt(eff.best.w):"&mdash;"}</span>
         <span class="muted">${eff?"kg &times; "+eff.best.r+" reps":"nothing logged yet"}</span></div>
@@ -921,11 +941,13 @@ function viewSession(){
     </div>`;
   });
   const v=sessionVolume(a);
+  const moved = a.order && a.order.join(",")!==day.slots.map((_,i)=>i).join(",");
   return `<div class="nav"><div class="brand">Atlas</div></div>
     <div class="top"><div class="clockbar"><h1>${h(day.name)}</h1><span class="clock" id="clock">${clockText()}</span>
       <span class="resttop" id="resttop">${(()=>{const r=restState(); return r&&r.running?mmss(r.left):"";})()}</span></div>
       <span class="sub">${dstamp(a.start)}<br>${tstamp(a.start)}</span></div>
     <div class="wrap">${body}
+    ${moved?`<div class="card flat dim">Order changed for today only. ${h(day.name)} itself is unchanged.</div>`:""}
     <button class="btn" data-addex="${di}">Add an exercise to this session</button>
     <div class="card flat dim">${v.sets} sets logged, ${v.volume.toLocaleString()} kg lifted</div></div>`;
 }
@@ -1054,18 +1076,15 @@ function viewExHistory(){
   const ex=exById(UI.exHist), hist=exerciseHistory(UI.exHist);
   const pts=hist.map(x=>{ const best=x.sets.reduce((a,b)=>e1rm(b)>e1rm(a)?b:a); return {d:x.date, v:e1rm(best)}; });
   let chart="";
-  if(pts.length>1){
-    const vals=pts.map(p=>p.v), lo=Math.min(...vals)*0.97, hi=Math.max(...vals)*1.03, W=320, H=120;
-    const xy=i=>[8+i*(W-16)/(pts.length-1), H-10-((pts[i].v-lo)/(hi-lo))*(H-26)];
-    const path=pts.map((p,i)=>{ const [x,y]=xy(i); return (i?"L":"M")+x.toFixed(1)+" "+y.toFixed(1); }).join(" ");
-    const dots=pts.map((p,i)=>{ const [x,y]=xy(i); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.5" fill="#b08d57"/>`; }).join("");
-    chart=`<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-label="Estimated one rep max over time">
-      <path d="${path}" fill="none" stroke="#b08d57" stroke-width="2"/>${dots}</svg>
-      <p class="metaline">Estimated one rep max, ${fmt(pts[0].v)} kg to ${fmt(pts[pts.length-1].v)} kg.</p>`;
+  if(pts.length){
+    chart=lineChart(pts.map(p=>p.v), [dstamp(pts[0].d), dstamp(pts[pts.length-1].d)],
+      {label:"Estimated one rep max over time", fmt:v=>fmt(v)+" kg"});
   }
   return `<div class="top"><h1>${h(ex.name)}</h1><span class="sub">${h(M[ex.muscle].name)}</span></div>
   <div class="wrap">
-    ${hist.length?`<div class="card"><h2>Progress</h2>${chart||`<p class="dim">One session so far. The chart appears from the second.</p>`}</div>`:""}
+    ${hist.length?`<div class="card"><h2>Estimated one rep max</h2>${chart}
+      ${pts.length>1?`<p class="metaline">${fmt(pts[0].v)} kg to ${fmt(pts[pts.length-1].v)} kg across ${pts.length} sessions.</p>`
+        :`<p class="metaline">One session so far. The line builds from the second.</p>`}</div>`:""}
     ${hist.slice().reverse().map(x=>`<div class="card">
       <div class="row sb"><h2>${dstamp(x.date)}</h2><span class="dim">${h(x.day)}</span></div>
       <table><tbody>${x.sets.map((s,i)=>`<tr><td class="dim">Set ${i+1}</td>
@@ -1134,27 +1153,32 @@ function weekKeys(n){
 }
 const wkey = d => d.toISOString().slice(0,10);
 
-function barChart(values, labels, opts){
-  const o=opts||{}, W=320, H=120, n=values.length;
-  const max=Math.max(1, ...values);
-  const bw=(W-8)/n;
-  const bars=values.map((v,i)=>{
-    const hgt=Math.round((v/max)*(H-30));
-    const x=4+i*bw, y=H-20-hgt;
-    const live=i===n-1;
-    return `<rect x="${(x+bw*0.16).toFixed(1)}" y="${y}" width="${(bw*0.68).toFixed(1)}" height="${Math.max(hgt,1)}"
-      fill="${live?"#b08d57":"url(#hatch)"}" stroke="${live?"none":"#3a3a40"}" stroke-width="${live?0:1}"/>`;
-  }).join("");
-  const ticks=labels.map((l,i)=>{
-    if(n>8 && i%2) return "";
-    return `<text x="${(4+i*bw+bw/2).toFixed(1)}" y="${H-6}" font-size="9" fill="#7e7e84" text-anchor="middle">${h(l)}</text>`;
-  }).join("");
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${h(o.label||"chart")}">
-    <defs><pattern id="hatch" width="5" height="5" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
-      <line x1="0" y1="0" x2="0" y2="5" stroke="#4a4a52" stroke-width="2.4"/></pattern></defs>
-    <line x1="4" y1="${H-20}" x2="${W-4}" y2="${H-20}" stroke="#26262a" stroke-width="1"/>
-    ${bars}${ticks}
-    <text x="${W-6}" y="12" font-size="10" fill="#a2a2a6" text-anchor="end">${h(o.top||"")}</text></svg>`;
+function lineChart(values, labels, opts){
+  const o=opts||{}, W=320, H=150, n=values.length;
+  const L=8, R=8, T=22, B=24;
+  const max=Math.max(1, ...values)*1.12;
+  const fmtv=o.fmt||(v=>String(Math.round(v)));
+  const px=i=> n===1 ? W/2 : L + i*(W-L-R)/(n-1);
+  const py=v=> H-B - (v/max)*(H-T-B);
+  const pts=values.map((v,i)=>[px(i), py(v)]);
+  const line=pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
+  const area=`${line} L ${pts[pts.length-1][0].toFixed(1)} ${(H-B).toFixed(1)} L ${pts[0][0].toFixed(1)} ${(H-B).toFixed(1)} Z`;
+  const grid=[0,.5,1].map(f=>`<line x1="${L}" y1="${py(max*f).toFixed(1)}" x2="${W-R}" y2="${py(max*f).toFixed(1)}" stroke="#26262a" stroke-width="1"/>`).join("");
+  const dots=pts.slice(0,-1).map(p=>`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2" fill="#3a3a40"/>`).join("");
+  const last=pts[pts.length-1], lastV=values[values.length-1];
+  const ends=[0, n-1].filter((v,i,a)=>a.indexOf(v)===i).map(i=>
+    `<text x="${i===0?L:W-R}" y="${H-7}" font-size="10" fill="#7e7e84" text-anchor="${i===0?"start":"end"}">${h(labels[i]||"")}</text>`).join("");
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${h(o.label||"chart")}">
+    <defs><linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#b08d57" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#b08d57" stop-opacity="0"/></linearGradient></defs>
+    ${grid}
+    ${n>1?`<path d="${area}" fill="url(#fade)"/>`:""}
+    ${n>1?`<path d="${line}" fill="none" stroke="#b08d57" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`:""}
+    ${dots}
+    <circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="3.6" fill="#b08d57"/>
+    <text x="${(W-R).toFixed(1)}" y="14" font-size="12" font-weight="600" fill="#f0efec" text-anchor="end">${h(fmtv(lastV))}</text>
+    ${ends}</svg>`;
 }
 
 function sessionsPerWeek(n){
@@ -1214,18 +1238,19 @@ function viewProgress(){
 
   return `<div class="top"><h1>Progress</h1><span class="sub">${done.length} sessions</span></div>
   <div class="wrap">
-    <div class="card"><div class="row sb"><h2>Sessions a week</h2><span class="pill">${avg} average</span></div>
-      ${barChart(sw.counts, sw.weeks.map(w=>w.getDate()+" "+MONTHS[w.getMonth()]), {label:"Sessions per week", top:"peak "+Math.max(...sw.counts)})}
+    <div class="card"><h2>Sessions a week</h2>
+      <div class="statline"><span class="stat">${sw.counts[sw.counts.length-1]}</span><span class="statsub">this week, ${avg} a week on average</span></div>
+      ${lineChart(sw.counts, sw.weeks.map(w=>w.getDate()+" "+MONTHS[w.getMonth()]), {label:"Sessions per week"})}
       <p class="metaline">Last twelve weeks. The right hand bar is the week you are in, so it fills as you go.</p></div>
 
     <div class="card"><h2>Volume by muscle</h2>
-      <p class="dim" style="margin:6px 0 0">Weight times reps, working sets only.</p>
+      <div class="statline"><span class="stat">${vol.vals[vol.vals.length-1]>=1000?fmt(vol.vals[vol.vals.length-1]/1000)+"t":Math.round(vol.vals[vol.vals.length-1])+"kg"}</span>
+        <span class="statsub">${h(M[UI.volMuscle].name)} this week</span></div>
       <div class="row" style="flex-wrap:wrap;margin-top:12px">
         ${muscles.map(mk=>`<button class="pill ${UI.volMuscle===mk?"on":""}" data-volmuscle="${mk}">${h(M[mk].name)}</button>`).join("")}
       </div>
-      ${barChart(vol.vals.map(v=>Math.round(v)), vol.weeks.map(w=>w.getDate()+" "+MONTHS[w.getMonth()]), {label:"Volume per week", top:"peak "+fmt(Math.max(...vol.vals)/1000)+"t"})}
-      <p class="metaline">${fmt(vol.vals[vol.vals.length-1]/1000)} tonnes this week, against ${fmt(vol.vals[vol.vals.length-2]/1000)} last week.
-      Volume moves when you swap exercises or change rep ranges, so read it as a trend rather than a score.</p></div>
+      ${lineChart(vol.vals, vol.weeks.map(w=>w.getDate()+" "+MONTHS[w.getMonth()]), {label:"Volume per week", fmt:v=>v>=1000?fmt(v/1000)+" t":Math.round(v)+" kg"})}
+      <p class="metaline">Weight times reps, working sets only. It moves when you swap exercises or change rep ranges, so read the shape rather than the number.</p></div>
 
     <div class="card"><h2>Estimated one rep max</h2>
       <table style="margin-top:10px"><thead><tr><th>Lift</th><th class="n">Now</th><th class="n">Change</th></tr></thead><tbody>
@@ -1367,6 +1392,15 @@ document.addEventListener("click", async ev=>{
 
   if(d.tab){ if(d.tab==="settings" && S.cfg.url && S.cfg.key) refreshWho();
     UI.tab=d.tab; UI.folder=null; UI.moveFor=null; UI.newFolder=null; UI.pickFor=null; UI.histId=null; UI.exHist=null; UI.editing=false; UI.editRoutine=null; UI.tuneSlot=null; UI.focus=null; window.scrollTo(0,0); render(); return; }
+  if(d.sessmove){
+    const [siRaw,dir]=d.sessmove.split("-");
+    const a=S.active, day=P().days[a.di];
+    const order=sessionOrder(a, day).slice();
+    const pos=order.indexOf(+siRaw), to = dir==="up" ? pos-1 : pos+1;
+    if(to<0 || to>=order.length){ toast(dir==="up"?"Already first.":"Already last."); return; }
+    const t=order[pos]; order[pos]=order[to]; order[to]=t;
+    a.order=order; save(); render(); return;
+  }
   if(d.openslot!=null && d.openslot!==""){ UI.openSlots[d.openslot]=!UI.openSlots[d.openslot]; render(); return; }
   if(d.exhist){ UI.exHist=d.exhist; UI.focus=null; window.scrollTo(0,0); render(); return; }
   if(d.closeex){ UI.exHist=null; window.scrollTo(0,0); render(); return; }
