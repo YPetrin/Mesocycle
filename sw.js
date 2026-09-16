@@ -1,4 +1,4 @@
-const CACHE = "atlas-v22";
+const CACHE = "atlas-v23";
 const CORE = ["./", "./index.html", "./manifest.json", "./icon.svg"];
 const EXTRA = ["./hero.jpg"];                            // optional, missing is fine
 

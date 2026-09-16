@@ -179,6 +179,8 @@ tr:last-child td{border-bottom:0}
 .statline{display:flex;align-items:baseline;gap:10px;margin-top:10px}
 .stat{font-size:34px;font-weight:700;letter-spacing:-0.04em;line-height:1}
 .statsub{font-size:13px;color:var(--dim)}
+.hr2{height:1px;background:var(--line);margin:18px 0}
+.code{font-size:30px;font-weight:700;letter-spacing:.06em;color:var(--acc);margin:12px 0 0}
 .search{margin-bottom:12px}
 .empty{border:1px solid var(--line);border-radius:4px;padding:34px 20px;margin:14px 0;text-align:center;background:var(--surface)}
 .empty p{color:var(--mid);margin:8px 0 18px}
@@ -326,7 +328,7 @@ const exById = id => allEx().find(x=>x.id===id) || {id, name:"Removed exercise",
 /* ============================================================
    Atlas: routines, sessions, history
    ============================================================ */
-const BUILD="22";                 /* bump this and the CACHE name in sw.js together */
+const BUILD="23";                 /* bump this and the CACHE name in sw.js together */
 const BUILT="13 September 2026";
 const KEY="atlas.state.v3";
 let S = load() || fresh();
@@ -336,7 +338,7 @@ if(!S.custom) S.custom=[];
 CUSTOM=S.custom;
 let UI = {tab:"dash", wizard:null, toast:null, pickFor:null, draft:{}, histId:null, cal:null, calDay:null,
           search:"", newEx:null, exHist:null, editing:false, warmMark:{}, focus:null, ask:null,
-          newRoutine:null, openSlots:{}, editRoutine:null, orm:null, tuneSlot:null, diag:null, who:null, folder:null, newFolder:null, moveFor:null, volMuscle:"chest", staleOk:false};
+          newRoutine:null, openSlots:{}, editRoutine:null, orm:null, tuneSlot:null, diag:null, who:null, folder:null, newFolder:null, moveFor:null, volMuscle:"chest", staleOk:false, newCode:null};
 let tick=null;
 
 function fresh(){ return {v:3, program:null, active:null, custom:[], cfg:{url:"",key:"",email:""}, updated:0}; }
@@ -514,25 +516,69 @@ async function pullRemote(silent){
     } else if(!silent) toast("This device is already current.");
   }catch(err){ if(!silent){ UI.diag="Pull failed: "+(err&&err.message?err.message:String(err)); render(); } }
 }
-async function signIn(email){
-  UI.diag="Sending...";
+/* An Atlas code is the whole account. It becomes credentials behind the scenes. */
+const CODE_ALPHABET="23456789ABCDEFGHJKLMNPQRSTUVWXYZ";   /* no 0 O 1 I */
+function makeCode(){
+  const b=new Uint32Array(8);
+  (window.crypto||window.msCrypto).getRandomValues(b);
+  const s=[...b].map(n=>CODE_ALPHABET[n%CODE_ALPHABET.length]).join("");
+  return s.slice(0,4)+"-"+s.slice(4);
+}
+const cleanCode = c => String(c||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+const prettyCode = c => { const x=cleanCode(c); return x.length===8 ? x.slice(0,4)+"-"+x.slice(4) : x; };
+const codeEmail = c => cleanCode(c).toLowerCase()+"@atlas.app";
+const codePass  = c => "atlas:"+cleanCode(c)+":v1";
+
+async function signInWithCode(code, creating){
+  const clean=cleanCode(code);
+  if(clean.length<6){ UI.diag="A code is at least six characters."; render(); return false; }
+  UI.diag = creating ? "Creating your code..." : "Signing in...";
   render();
   try{
-    if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(S.cfg.url)){
-      UI.diag="The project URL looks wrong. It should be https://yourprojectid.supabase.co with nothing after it."; render(); return;
-    }
-    if(!S.cfg.key || S.cfg.key.length<20){ UI.diag="The key looks wrong or missing."; render(); return; }
     const c=await initSync();
-    if(!c){ UI.diag="Could not load the Supabase library. Are you online?"; render(); return; }
-    const {error}=await c.auth.signInWithOtp({email, options:{emailRedirectTo:location.href.split("#")[0]}});
-    UI.diag = error ? ("Supabase said: "+(error.message||JSON.stringify(error))+(error.status?" (status "+error.status+")":""))
-                    : "Sent. Check your email, including spam.";
-    if(!error) refreshWho();
+    if(!c){ UI.diag="Add your Supabase details first."; render(); return false; }
+    if(creating){
+      const {error}=await c.auth.signUp({email:codeEmail(clean), password:codePass(clean)});
+      if(error && !/already/i.test(error.message||"")){
+        UI.diag="Could not create that code. "+(error.message||"");
+        render(); return false;
+      }
+    }
+    const {error}=await c.auth.signInWithPassword({email:codeEmail(clean), password:codePass(clean)});
+    if(error){
+      UI.diag = creating
+        ? "Created, but sign-in failed. In Supabase, Authentication, Providers, Email, turn Confirm email off."
+        : "That code did not work. Check it, or create a new one.";
+      render(); return false;
+    }
+    S.cfg.code=clean; save(false);
+    UI.diag = creating ? "Code created and signed in." : "Signed in.";
+    refreshWho();
+    await pullRemote(true);
+    render();
+    return true;
   }catch(err){
-    UI.diag="Failed before reaching Supabase: "+(err && err.message ? err.message : String(err));
+    UI.diag="Failed before reaching Supabase: "+(err&&err.message?err.message:String(err));
+    render(); return false;
   }
-  render();
 }
+
+/* Sessions refresh themselves, but if one lapses we sign back in from the saved code */
+async function ensureSession(){
+  if(!S.cfg.url || !S.cfg.key || !S.cfg.code) return;
+  try{
+    const c=await initSync(); if(!c) return;
+    const {data:{user}}=await c.auth.getUser();
+    if(user) return;
+    await c.auth.signInWithPassword({email:codeEmail(S.cfg.code), password:codePass(S.cfg.code)});
+  }catch(err){ /* offline, try again next launch */ }
+}
+
+async function signOutCode(){
+  try{ const c=await initSync(); if(c) await c.auth.signOut(); }catch(err){}
+  S.cfg.code=""; save(false); UI.who=false; UI.diag="Signed out on this device."; render();
+}
+
 
 /* Plain reachability test that does not involve email at all */
 async function testConnection(){
@@ -550,6 +596,7 @@ async function testConnection(){
 function refreshWho(){
   whoami().then(em=>{ UI.who = em || false; render(); }).catch(()=>{ UI.who=false; render(); });
 }
+
 async function whoami(){
   try{ const c=await initSync(); if(!c) return null; const {data:{user}}=await c.auth.getUser(); return user?user.email:null; }catch(err){ return null; }
 }
@@ -1320,18 +1367,29 @@ function viewSettings(){
       <p class="dim" style="margin:6px 0 0">Optional. Without it everything stays on this device.</p>
       <div class="stack" style="margin-top:12px">
         <div><label class="f">Supabase project URL</label><input id="sburl" value="${h(S.cfg.url)}" placeholder="https://xxxx.supabase.co"></div>
-        <div><label class="f">Anon public key</label><input id="sbkey" value="${h(S.cfg.key)}" placeholder="eyJ..."></div>
+        <div><label class="f">Publishable key</label><input id="sbkey" value="${h(S.cfg.key)}" placeholder="sb_publishable_..."></div>
         <button class="btn" data-savecfg="1">Save connection</button>
-        <div><label class="f">Email for the sign-in link</label><input id="sbemail" value="${h(S.cfg.email)}" placeholder="you@example.com"></div>
-        <button class="btn" data-signin="1">Send sign-in link</button>
         <button class="btn" data-testconn="1">Test connection</button>
-        ${UI.diag?`<div class="card" style="margin:0;background:var(--surface2)"><p class="dim" style="margin:0;word-break:break-word">${h(UI.diag)}</p></div>`:""}
-        <div class="grid2"><button class="btn" data-pull="1" style="margin-top:0">Pull from cloud</button>
-          <button class="btn" data-push="1" style="margin-top:0">Push to cloud</button></div>
-        <p class="dim" id="who">${UI.who===null?"Checking sign-in status."
-          : UI.who ? "Signed in as "+h(UI.who)
-          : "Not signed in on this device."}</p>
-      </div></div>
+      </div>
+      <div class="hr2"></div>
+      ${UI.who
+        ? `<div class="row sb"><span class="dim">Signed in</span><strong>${h(prettyCode(S.cfg.code)||"yes")}</strong></div>
+           <p class="metaline">This device stays signed in. Use the same code on another device to see the same data.</p>
+           <div class="grid2" style="margin-top:12px">
+             <button class="btn" data-pull="1" style="margin-top:0">Pull from cloud</button>
+             <button class="btn" data-push="1" style="margin-top:0">Push to cloud</button>
+           </div>
+           <button class="btn" data-signout="1">Sign out on this device</button>`
+        : `<p class="dim" style="margin:0 0 10px">Your Atlas code is the whole account. No email, no password.</p>
+           <button class="btn solid" data-newcode="1">Create a new code</button>
+           <div style="margin-top:14px"><label class="f">Or enter an existing code</label>
+             <input id="codein" value="" placeholder="7K2M-94QD" autocapitalize="characters" autocomplete="off"></div>
+           <button class="btn" data-usecode="1">Sign in with this code</button>`}
+      ${UI.diag?`<div class="card" style="margin:14px 0 0;background:var(--surface2)"><p class="dim" style="margin:0;word-break:break-word">${h(UI.diag)}</p></div>`:""}
+      ${UI.newCode?`<div class="card" style="margin:14px 0 0;background:var(--surface2)">
+        <h2>Your code</h2><p class="code">${h(UI.newCode)}</p>
+        <p class="metaline">Write this down now. It is the only way back into this data on another device, and nobody can recover it for you.</p></div>`:""}
+    </div>
     <div class="card"><h2>Rest timer</h2>
       <p class="dim" style="margin:6px 0 0">Counts down after every set you log, then stops until the next one. Silent, so watch the bar above the Finish button or the number in the header.</p>
       <div style="margin-top:12px"><label class="f">Rest length, seconds</label>
@@ -1390,7 +1448,7 @@ document.addEventListener("click", async ev=>{
   if(d.askyes){ const a=UI.ask; UI.ask=null; if(a) doAct(a.act,a.arg); render(); return; }
   if(d.askno){ UI.ask=null; render(); return; }
 
-  if(d.tab){ if(d.tab==="settings" && S.cfg.url && S.cfg.key) refreshWho();
+  if(d.tab){ if(d.tab==="settings" && S.cfg.url && S.cfg.key){ ensureSession().then(refreshWho); }
     UI.tab=d.tab; UI.folder=null; UI.moveFor=null; UI.newFolder=null; UI.pickFor=null; UI.histId=null; UI.exHist=null; UI.editing=false; UI.editRoutine=null; UI.tuneSlot=null; UI.focus=null; window.scrollTo(0,0); render(); return; }
   if(d.sessmove){
     const [siRaw,dir]=d.sessmove.split("-");
@@ -1659,11 +1717,19 @@ document.addEventListener("click", async ev=>{
     S.cfg.rest=n; save(); render(); toast("Rest set to "+n+" seconds."); return;
   }
   if(d.savecfg){ S.cfg.url=$("#sburl").value.trim().replace(/\/$/,""); S.cfg.key=$("#sbkey").value.trim(); sb=null; save(false); toast("Saved."); render(); return; }
-  if(d.signin){
-    const em=$("#sbemail").value.trim();
-    if(!em || em.indexOf("@")<0){ toast("Enter your email first."); return; }
-    S.cfg.email=em; save(false); signIn(em); return;
+  if(d.newcode){
+    const code=makeCode();
+    const okDone=await signInWithCode(code, true);
+    if(okDone){ UI.newCode=prettyCode(code); render(); }
+    return;
   }
+  if(d.usecode){
+    const el=$("#codein"); if(!el) return;
+    UI.newCode=null;
+    await signInWithCode(el.value, false);
+    return;
+  }
+  if(d.signout){ UI.newCode=null; signOutCode(); return; }
   if(d.testconn){
     S.cfg.url=$("#sburl").value.trim().replace(/\/$/,""); S.cfg.key=$("#sbkey").value.trim(); sb=null; save(false);
     testConnection(); return;
@@ -1753,7 +1819,7 @@ async function checkForUpdate(){
    BOOT
    ============================================================ */
 render();
-if(S.cfg.url && S.cfg.key){ pullRemote(true).then(refreshWho); }
+if(S.cfg.url && S.cfg.key){ ensureSession().then(()=>pullRemote(true)).then(refreshWho); }
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(()=>{}); }
 checkForUpdate();
 document.addEventListener("visibilitychange", ()=>{ if(!document.hidden && !S.active) checkForUpdate(); });
