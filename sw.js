@@ -1,6 +1,6 @@
-const CACHE = "atlas-v23";
-const CORE = ["./", "./index.html", "./manifest.json", "./icon.svg"];
-const EXTRA = ["./hero.jpg"];                            // optional, missing is fine
+const CACHE = "atlas-v28";
+const CORE = ["./", "./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png"];
+const EXTRA = ["./hero.jpg", "./icon-maskable.png"];      // optional, missing is fine
 
 self.addEventListener("install", e => {
   e.waitUntil(

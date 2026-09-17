@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#0c0c0d">
 <title>Atlas</title>
 <link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -153,6 +154,7 @@ tr:last-child td{border-bottom:0}
 .hist{display:flex;justify-content:space-between;gap:12px;padding:16px 2px;flex:1;min-width:0;text-align:left}
 .histdel{flex:none;align-self:center}
 .hist strong{font-size:16px;font-weight:600}
+.histsets{font-size:17px;font-weight:600;letter-spacing:-0.02em;margin-top:4px}
 .hist .d{color:var(--dim);font-size:13px}
 .calwrap{padding:4px 0 20px;border-bottom:1px solid var(--line);margin-bottom:4px}
 .calhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
@@ -328,7 +330,7 @@ const exById = id => allEx().find(x=>x.id===id) || {id, name:"Removed exercise",
 /* ============================================================
    Atlas: routines, sessions, history
    ============================================================ */
-const BUILD="23";                 /* bump this and the CACHE name in sw.js together */
+const BUILD="28";                 /* bump this and the CACHE name in sw.js together */
 const BUILT="13 September 2026";
 const KEY="atlas.state.v3";
 let S = load() || fresh();
@@ -338,7 +340,7 @@ if(!S.custom) S.custom=[];
 CUSTOM=S.custom;
 let UI = {tab:"dash", wizard:null, toast:null, pickFor:null, draft:{}, histId:null, cal:null, calDay:null,
           search:"", newEx:null, exHist:null, editing:false, warmMark:{}, focus:null, ask:null,
-          newRoutine:null, openSlots:{}, editRoutine:null, orm:null, tuneSlot:null, diag:null, who:null, folder:null, newFolder:null, moveFor:null, volMuscle:"chest", staleOk:false, newCode:null};
+          newRoutine:null, openSlots:{}, editRoutine:null, orm:null, tuneSlot:null, diag:null, who:null, folder:null, newFolder:null, moveFor:null, volMuscle:"chest", staleOk:false, newCode:null, focusSlot:null, browsing:false};
 let tick=null;
 
 function fresh(){ return {v:3, program:null, active:null, custom:[], cfg:{url:"",key:"",email:""}, updated:0}; }
@@ -683,7 +685,18 @@ function render(){
   if(UI.tuneSlot){ stopTick(); app.innerHTML=viewTune(); foot.innerHTML=askSheet(); return; }
   if(UI.editRoutine!=null){ stopTick(); app.innerHTML=viewRoutineEditor(); foot.innerHTML=askSheet(); return; }
   if(staleSession()){ stopTick(); app.innerHTML=viewStale(); foot.innerHTML=askSheet(); return; }
-  if(S.active && !S.active.finishing){ app.innerHTML=viewSession(); foot.innerHTML=footSession()+askSheet(); startTick(); }
+  if(S.active && !S.active.finishing && UI.exHist){
+    app.innerHTML=navBar()+viewExHistory(); foot.innerHTML=footResume()+askSheet(); startTick(); return;
+  }
+  if(S.active && !S.active.finishing && !UI.browsing){
+    app.innerHTML = navBar() + (UI.focusSlot!=null ? viewFocus() : viewSession());
+    foot.innerHTML=footSession()+askSheet(); startTick();
+  }
+  else if(S.active && !S.active.finishing){
+    app.innerHTML = navBar() + (UI.tab==="dash"?viewDash() : UI.tab==="home"?viewHome() : UI.tab==="progress"?viewProgress()
+      : UI.tab==="history"?viewHistory() : UI.tab==="info"?viewInfo() : viewSettings());
+    foot.innerHTML=footResume()+askSheet(); startTick(); focusBack();
+  }
   else if(S.active){ stopTick(); app.innerHTML=viewFinish(); foot.innerHTML=footFinish()+askSheet(); }
   else{
     stopTick();
@@ -930,73 +943,131 @@ function sessionOrder(a, day){
   const kept=a.order.filter(i=>i<day.slots.length);
   return kept.concat(base.filter(i=>!kept.includes(i)));
 }
+/* One exercise, used both in the session list and in focus mode */
+function exerciseBlock(a, day, si, focus){
+  const di=a.di, slot=day.slots[si], sets=plannedSets(di,si);
+  const ex=exById(slot.exId), eff=lastEffort(di,si), rng=slotRange(slot, ex);
+  const log=a.entries[si]||[];
+  const extras=log.filter(x=>x.warm||x.drop).length;
+  const working=log.length-extras;
+  if(!focus && working>=sets && !UI.openSlots[si]){
+    const w2=log.filter(x=>!x.warm && !x.drop);
+    const summary=w2.length?`${fmt(w2[w2.length-1].w)} kg &times; ${w2.map(x=>x.r).join(", ")}`:"warm-ups only";
+    return `<button class="done-line" data-openslot="${si}"><span class="nm">${h(ex.name)}</span><span class="vals">${summary}</span></button>`;
+  }
+  const prev=eff?eff.sets:null;
+  let rows="";
+  for(let i=0;i<Math.max(sets+extras, log.length);i++){
+    const s=log[i], done=!!s, p=prev&&prev[i];
+    const carry=(!done && i>0 && log[i-1])?log[i-1]:null;
+    const phW=carry?fmt(carry.w):"kg";
+    const phR=carry?carry.r:"reps";
+    const mark = s ? (s.warm?"warm":s.drop?"drop":"") : (UI.warmMark[si+"-"+i]||"");
+    rows+=`${p?`<div class="setgrid"><span></span><div class="prev">last time ${fmt(p.w)} kg &times; ${p.r}${p.rir!=null?" @ "+p.rir+" RIR":""}</div><span></span></div>`:""}
+    <div class="setrow ${done?"done":""}">
+      <button class="idx ${mark?mark:""}" data-warm="${si}-${i}" aria-label="Set ${i+1} type">${mark==="warm"?"W":mark==="drop"?"D":i+1}</button>
+      <input inputmode="decimal" data-in="w" data-si="${si}" data-i="${i}" value="${done?fmt(s.w):h(UI.draft[si+"-"+i+"-w"]||"")}" placeholder="${phW}" aria-label="Weight set ${i+1}">
+      <input inputmode="numeric" data-in="r" data-si="${si}" data-i="${i}" value="${done?s.r:h(UI.draft[si+"-"+i+"-r"]||"")}" placeholder="${phR}" aria-label="Reps set ${i+1}">
+      <input inputmode="numeric" data-in="rir" data-si="${si}" data-i="${i}" value="${done?(s.rir==null?"":s.rir):h(UI.draft[si+"-"+i+"-rir"]||"")}" placeholder="RIR" aria-label="Reps in reserve set ${i+1}">
+      <button class="tick" data-logset="${si}" data-i="${i}">${done?"&check;":(i>=sets+extras&&!hasDraft(si,i))?"&times;":"Log"}</button>
+    </div>${done && !s.warm && p && (s.w*s.r > p.w*p.r)?`<div class="metaline" style="margin:-2px 0 6px">Better than last time<span class="pb">PB</span></div>`:""}`;
+  }
+  return `<div class="card">
+    ${slot.ss?`<div class="sslabel">Superset with ${h(exById(day.slots[si-1].exId).name)}</div>`:""}
+    <div class="row sb">
+      <button style="text-align:left" ${focus?`data-exhist="${h(slot.exId)}"`:`data-focus="${si}"`}><h2>${h(ex.name)}</h2>
+        ${focus?"":`<span class="dim">tap for history</span>`}</button>
+      ${focus?"":`<span class="row" style="gap:6px">
+        <button class="pill" data-sessmove="${si}-up" aria-label="Move earlier in this session">&uarr;</button>
+        <button class="pill" data-sessmove="${si}-down" aria-label="Move later in this session">&darr;</button>
+        <button class="pill" data-skip="${si}">Skip</button></span>`}</div>
+    <div class="row" style="align-items:baseline;gap:12px;margin-top:10px">
+      <span class="big">${eff?fmt(eff.best.w):"&mdash;"}</span>
+      <span class="muted">${eff?"kg &times; "+eff.best.r+" reps":"nothing logged yet"}</span></div>
+    ${slot.note?`<div class="metaline" style="color:var(--mid)">${h(slot.note)}</div>`:""}
+    <div class="metaline">${eff
+      ? "Best set last time, "+ago(eff.when)+". Whole session: "+eff.sets.map(x=>fmt(x.w)+"&times;"+x.r).join(", ")+"."
+      : "Rep range "+rng[0]+" to "+rng[1]+"."}
+      Target ${sets} working ${sets===1?"set":"sets"}${extras?", plus "+extras+" marked warm-up or drop":""}.</div>
+    <div class="setgrid" style="margin-top:14px"><span></span>
+      <span class="dim" style="text-align:center">kg</span><span class="dim" style="text-align:center">reps</span>
+      <span class="dim" style="text-align:center">RIR</span><span></span></div>
+    ${rows}
+    <div class="row" style="gap:8px;margin-top:10px">
+      <button class="btn small" data-addset="${si}">Add a set</button>
+      ${focus?`<button class="btn small" data-swap="${di}-${si}">Swap exercise</button>`:""}
+    </div>
+  </div>`;
+}
+
+/* Compact history, the way a training log reads: date, the sets, total reps */
+function compactHistory(di, si, limit){
+  const slot=P().days[di].slots[si];
+  const out=[];
+  P().sessions.filter(s=>s.finished && s.entries).forEach(s=>{
+    const day=P().days[s.di]; if(!day) return;
+    const at=day.slots[si];
+    if(!at || at.exId!==slot.exId) return;
+    const sets=(s.entries[si]||[]).filter(x=>!x.warm);
+    if(sets.length) out.push({date:s.end||s.start, sets, id:s.id});
+  });
+  return out.sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0, limit||5);
+}
+
+function viewFocus(){
+  const a=S.active, day=P().days[a.di], si=UI.focusSlot;
+  const slot=day.slots[si];
+  if(!slot){ UI.focusSlot=null; return viewSession(); }
+  const hist=compactHistory(a.di, si, 5);
+  const ex=exById(slot.exId);
+  return `<div class="top"><div class="clockbar"><h1>${h(ex.name)}</h1>
+      <span class="resttop" id="resttop">${(()=>{const r=restState(); return r&&r.running?mmss(r.left):"";})()}</span></div>
+      <span class="sub">${h(day.name)}<br><span id="clock">${clockText()}</span></span></div>
+    <div class="wrap">
+      <button class="btn" data-unfocus="1" style="margin-top:0">Back to the session</button>
+      ${exerciseBlock(a, day, si, true)}
+      <h2 style="margin:22px 0 2px">History</h2>
+      ${hist.length?hist.map(x=>{
+        const reps=x.sets.reduce((t,s)=>t+s.r,0);
+        return `<button class="hist" data-hist="${h(x.id)}">
+          <span><span class="d">${dstamp(x.date)}</span>
+          <div class="histsets">${x.sets.map(s=>fmt(s.w)+" &times; "+s.r).join(", ")}</div></span>
+          <span class="d" style="text-align:right">${reps}<br>reps</span></button>`;
+      }).join(""):`<div class="card flat dim">Nothing logged on this exercise yet.</div>`}
+      ${ormBlock((()=>{ const e2=lastEffort(a.di, si); const lg=(a.entries[si]||[]).filter(x=>!x.warm && !x.drop);
+        const s=lg.length?lg[lg.length-1]:(e2?e2.best:null); return s?{w:s.w, r:s.r}:null; })())}
+      <button class="btn" data-exhist="${h(slot.exId)}">Full history and chart</button>
+    </div>`;
+}
+
 function viewSession(){
   const a=S.active, di=a.di, day=P().days[di];
   const order=sessionOrder(a, day);
+  const skipped=a.skip||[];
   let body="";
-  order.forEach((si, pos)=>{
+  order.forEach(si=>{
     const slot=day.slots[si];
-    const sets=plannedSets(di,si);
-    if(slot.hidden || sets<=0) return;
-    const ex=exById(slot.exId), eff=lastEffort(di,si), rng=slotRange(slot, ex);
-    const log=a.entries[si]||[];
-    const extras=log.filter(x=>x.warm||x.drop).length;
-    const working=log.length-extras;
-    if(working>=sets && !UI.openSlots[si]){
-      const w2=log.filter(x=>!x.warm && !x.drop);
-      const summary=w2.length?`${fmt(w2[w2.length-1].w)} kg &times; ${w2.map(x=>x.r).join(", ")}`:"warm-ups only";
-      body+=`<button class="done-line" data-openslot="${si}"><span class="nm">${h(ex.name)}</span><span class="vals">${summary}</span></button>`;
-      return;
-    }
-    const prev=eff?eff.sets:null;
-    let rows="";
-    for(let i=0;i<Math.max(sets+extras, log.length);i++){
-      const s=log[i], done=!!s, p=prev&&prev[i];
-      const carry=(!done && i>0 && log[i-1])?log[i-1]:null;
-      const phW=carry?fmt(carry.w):"kg";
-      const phR=carry?carry.r:"reps";
-      const mark = s ? (s.warm?"warm":s.drop?"drop":"") : (UI.warmMark[si+"-"+i]||"");
-      rows+=`${p?`<div class="setgrid"><span></span><div class="prev">last time ${fmt(p.w)} kg &times; ${p.r}${p.rir!=null?" @ "+p.rir+" RIR":""}</div><span></span></div>`:""}
-      <div class="setrow ${done?"done":""}">
-        <button class="idx ${mark?mark:""}" data-warm="${si}-${i}" aria-label="Set ${i+1} type">${mark==="warm"?"W":mark==="drop"?"D":i+1}</button>
-        <input inputmode="decimal" data-in="w" data-si="${si}" data-i="${i}" value="${done?fmt(s.w):h(UI.draft[si+"-"+i+"-w"]||"")}" placeholder="${phW}" aria-label="Weight set ${i+1}">
-        <input inputmode="numeric" data-in="r" data-si="${si}" data-i="${i}" value="${done?s.r:h(UI.draft[si+"-"+i+"-r"]||"")}" placeholder="${phR}" aria-label="Reps set ${i+1}">
-        <input inputmode="numeric" data-in="rir" data-si="${si}" data-i="${i}" value="${done?(s.rir==null?"":s.rir):h(UI.draft[si+"-"+i+"-rir"]||"")}" placeholder="RIR" aria-label="Reps in reserve set ${i+1}">
-        <button class="tick" data-logset="${si}" data-i="${i}">${done?"&check;":(i>=sets+extras&&!hasDraft(si,i))?"&times;":"Log"}</button>
-      </div>${done && !s.warm && p && (s.w*s.r > p.w*p.r)?`<div class="metaline" style="margin:-2px 0 6px">Better than last time<span class="pb">PB</span></div>`:""}`;
-    }
-    body+=`<div class="card">
-      ${slot.ss?`<div class="sslabel">Superset with ${h(exById(day.slots[si-1].exId).name)}</div>`:""}
-      <div class="row sb"><button style="text-align:left" data-exhist="${h(slot.exId)}"><h2>${h(ex.name)}</h2></button>
-        <span class="row" style="gap:6px">
-          <button class="pill" data-sessmove="${si}-up" aria-label="Move earlier in this session">&uarr;</button>
-          <button class="pill" data-sessmove="${si}-down" aria-label="Move later in this session">&darr;</button>
-          <button class="pill" data-swap="${di}-${si}">Swap</button></span></div>
-      <div class="row" style="align-items:baseline;gap:12px;margin-top:10px">
-        <span class="big">${eff?fmt(eff.best.w):"&mdash;"}</span>
-        <span class="muted">${eff?"kg &times; "+eff.best.r+" reps":"nothing logged yet"}</span></div>
-      ${slot.note?`<div class="metaline" style="color:var(--mid)">${h(slot.note)}</div>`:""}
-      <div class="metaline">${eff
-        ? "Best set last time, "+ago(eff.when)+". Whole session: "+eff.sets.map(x=>fmt(x.w)+"&times;"+x.r).join(", ")+"."
-        : "Rep range "+rng[0]+" to "+rng[1]+"."}
-        Target ${sets} working ${sets===1?"set":"sets"}${extras?", plus "+extras+" marked warm-up or drop":""}.</div>
-      <div class="setgrid" style="margin-top:14px"><span></span>
-        <span class="dim" style="text-align:center">kg</span><span class="dim" style="text-align:center">reps</span>
-        <span class="dim" style="text-align:center">RIR</span><span></span></div>
-      ${rows}
-      <button class="btn small" data-addset="${si}" style="margin-top:10px">Add a set</button>
-    </div>`;
+    if(slot.hidden || plannedSets(di,si)<=0 || skipped.includes(si)) return;
+    body+=exerciseBlock(a, day, si, false);
   });
   const v=sessionVolume(a);
   const moved = a.order && a.order.join(",")!==day.slots.map((_,i)=>i).join(",");
-  return `<div class="nav"><div class="brand">Atlas</div></div>
-    <div class="top"><div class="clockbar"><h1>${h(day.name)}</h1><span class="clock" id="clock">${clockText()}</span>
+  return `<div class="top"><div class="clockbar"><h1>${h(day.name)}</h1><span class="clock" id="clock">${clockText()}</span>
       <span class="resttop" id="resttop">${(()=>{const r=restState(); return r&&r.running?mmss(r.left):"";})()}</span></div>
       <span class="sub">${dstamp(a.start)}<br>${tstamp(a.start)}</span></div>
     <div class="wrap">${body}
+    ${skipped.length?`<div class="card flat"><p class="dim" style="margin:0 0 10px">Skipped today: ${skipped.map(si=>h(exById(day.slots[si].exId).name)).join(", ")}</p>
+      <button class="btn small" data-unskip="1">Put them back</button></div>`:""}
     ${moved?`<div class="card flat dim">Order changed for today only. ${h(day.name)} itself is unchanged.</div>`:""}
     <button class="btn" data-addex="${di}">Add an exercise to this session</button>
     <div class="card flat dim">${v.sets} sets logged, ${v.volume.toLocaleString()} kg lifted</div></div>`;
+}
+function footResume(){
+  const r=restState();
+  return `<div class="foot"><div class="inner">
+    <div class="restbar${!r||!r.running?" idle":""}" id="rest">${!r?"Session running":r.running?"Rest "+mmss(r.left):"Rest over"}</div>
+    <button class="btn solid" data-resume="1">Resume ${h((P().days[S.active.di]||{name:"workout"}).name)}</button>
+  </div></div>`;
 }
 function footSession(){
   const r=restState();
@@ -1312,6 +1383,24 @@ function viewProgress(){
 }
 
 /* ---------- Info ---------- */
+function ormBlock(seed){
+  const o=UI.orm, est=o?o.w*(1+o.r/30):null;
+  const pcts=[100,95,90,85,80,75,70,65,60];
+  const repsAt={100:1,95:2,90:4,85:6,80:8,75:10,70:12,65:15,60:18};
+  return `<div class="card"><h2>One rep max</h2>
+    <p class="dim" style="margin:6px 0 0">From a set you have actually done. Reliable to about ten reps, rough beyond that.</p>
+    <div class="grid2" style="margin-top:12px">
+      <div><label class="f">Weight lifted</label><input id="ormw" inputmode="decimal" value="${o?fmt(o.w):(seed&&seed.w!=null?fmt(seed.w):"")}" placeholder="100"></div>
+      <div><label class="f">Reps</label><input id="ormr" inputmode="numeric" value="${o?o.r:(seed&&seed.r!=null?seed.r:"")}" placeholder="5"></div>
+    </div>
+    <button class="btn solid" data-orm="1">Calculate</button>
+    ${est?`<div class="statline" style="margin-top:16px"><span class="stat">${fmt(est)}</span><span class="statsub">kg estimated one rep max</span></div>
+    <table style="margin-top:12px"><thead><tr><th>Percent</th><th class="n">Weight</th><th class="n">Reps you should get</th></tr></thead><tbody>
+      ${pcts.map(p=>`<tr><td>${p}%</td><td class="n">${fmt(Math.round(est*p/100*2)/2)} kg</td><td class="n dim">${repsAt[p]}</td></tr>`).join("")}
+    </tbody></table>`:""}
+  </div>`;
+}
+
 function viewInfo(){
   const o=UI.orm;
   const est = o ? o.w*(1+o.r/30) : null;
@@ -1319,18 +1408,7 @@ function viewInfo(){
   const repsAt={100:1,95:2,90:4,85:6,80:8,75:10,70:12,65:15,60:18};
   return `<div class="top"><h1>Info</h1></div>
   <div class="wrap">
-    <div class="card"><h2>One rep max</h2>
-      <p class="dim" style="margin:6px 0 0">From a set you have actually done. Accurate to about ten reps, rough beyond that.</p>
-      <div class="grid2" style="margin-top:12px">
-        <div><label class="f">Weight lifted</label><input id="ormw" inputmode="decimal" value="${o?fmt(o.w):""}" placeholder="100"></div>
-        <div><label class="f">Reps</label><input id="ormr" inputmode="numeric" value="${o?o.r:""}" placeholder="5"></div>
-      </div>
-      <button class="btn solid" data-orm="1">Calculate</button>
-      ${est?`<div class="row sb" style="margin-top:16px"><span class="dim">Estimated one rep max</span><span class="big">${fmt(est)}</span></div>
-      <table style="margin-top:12px"><thead><tr><th>Percent</th><th class="n">Weight</th><th class="n">Reps you should get</th></tr></thead><tbody>
-        ${pcts.map(p=>`<tr><td>${p}%</td><td class="n">${fmt(Math.round(est*p/100*2)/2)} kg</td><td class="n dim">${repsAt[p]}</td></tr>`).join("")}
-      </tbody></table>`:""}
-    </div>
+    ${ormBlock(null)}
 
     <div class="card"><h2>Volume guide</h2>
       <p class="dim" style="margin:6px 0 0">Working sets per muscle in the last seven days, against where growth usually needs you to be. Below the minimum you maintain rather than grow. Above the maximum you gather fatigue faster than you clear it.</p>
@@ -1415,7 +1493,7 @@ function viewSettings(){
    ============================================================ */
 function doAct(act, arg){
   const p=P();
-  if(act==="discard"){ S.active=null; UI.draft={}; UI.warmMark={}; UI.openSlots={}; UI.staleOk=false; save(); toast("Session discarded."); return; }
+  if(act==="discard"){ S.active=null; UI.draft={}; UI.warmMark={}; UI.openSlots={}; UI.staleOk=false; UI.focusSlot=null; UI.browsing=false; save(); toast("Session discarded."); return; }
   if(act==="removeex"){ const [di,si]=arg.split("-").map(Number); p.days[di].slots[si].hidden=true; save(); return; }
   if(act==="delex"){
     S.custom=S.custom.filter(x=>x.id!==arg); syncCustom();
@@ -1448,8 +1526,21 @@ document.addEventListener("click", async ev=>{
   if(d.askyes){ const a=UI.ask; UI.ask=null; if(a) doAct(a.act,a.arg); render(); return; }
   if(d.askno){ UI.ask=null; render(); return; }
 
-  if(d.tab){ if(d.tab==="settings" && S.cfg.url && S.cfg.key){ ensureSession().then(refreshWho); }
+  if(d.tab){
+    if(S.active && !S.active.finishing) UI.browsing=true;
+    if(d.tab==="settings" && S.cfg.url && S.cfg.key){ ensureSession().then(refreshWho); }
     UI.tab=d.tab; UI.folder=null; UI.moveFor=null; UI.newFolder=null; UI.pickFor=null; UI.histId=null; UI.exHist=null; UI.editing=false; UI.editRoutine=null; UI.tuneSlot=null; UI.focus=null; window.scrollTo(0,0); render(); return; }
+  if(d.resume){ UI.browsing=false; UI.exHist=null; window.scrollTo(0,0); render(); return; }
+  if(d.focus!=null && d.focus!==""){ UI.focusSlot=+d.focus; window.scrollTo(0,0); render(); return; }
+  if(d.unfocus){ UI.focusSlot=null; window.scrollTo(0,0); render(); return; }
+  if(d.skip!=null && d.skip!==""){
+    const a=S.active, si=+d.skip;
+    const logged=(a.entries[si]||[]).length;
+    if(logged){ toast("Sets are already logged on that one."); return; }
+    a.skip=(a.skip||[]).concat([si]);
+    UI.focusSlot=null; save(); render(); toast("Skipped for today."); return;
+  }
+  if(d.unskip){ S.active.skip=[]; save(); render(); return; }
   if(d.sessmove){
     const [siRaw,dir]=d.sessmove.split("-");
     const a=S.active, day=P().days[a.di];
@@ -1598,8 +1689,9 @@ document.addEventListener("click", async ev=>{
   /* session */
   if(d.start!=null && d.start!==""){
     const di=+d.start;
-    S.active={id:"s"+Date.now(), di, start:new Date().toISOString(), entries:{}, rating:null, finished:false, finishing:false};
-    UI.draft={}; UI.warmMark={}; UI.openSlots={}; UI.staleOk=false; save(); window.scrollTo(0,0); render(); return;
+    if(S.active && !S.active.finishing){ UI.browsing=false; render(); toast("Finish the session you have open first."); return; }
+    S.active={id:"s"+Date.now(), di, start:new Date().toISOString(), entries:{}, rating:null, finished:false, finishing:false, skip:[]};
+    UI.draft={}; UI.warmMark={}; UI.openSlots={}; UI.staleOk=false; UI.focusSlot=null; save(); window.scrollTo(0,0); render(); return;
   }
   if(d.logset!=null && d.logset!==""){
     const si=+d.logset, i=+d.i, a=S.active;
@@ -1648,9 +1740,9 @@ document.addEventListener("click", async ev=>{
     save(); render(); return;
   }
   if(d.staleresume){ UI.staleOk=true; render(); return; }
-  if(d.stalefinish){ UI.staleOk=true; S.active.finishing=true; save(); render(); return; }
+  if(d.stalefinish){ UI.staleOk=true; UI.browsing=false; S.active.finishing=true; save(); render(); return; }
   if(d.stalediscard){ ask("Discard that unfinished session? Nothing is saved.", "discard", null, true); return; }
-  if(d.finishsession){ S.active.finishing=true; window.scrollTo(0,0); save(); render(); return; }
+  if(d.finishsession){ UI.browsing=false; S.active.finishing=true; window.scrollTo(0,0); save(); render(); return; }
   if(d.backtosession){ S.active.finishing=false; window.scrollTo(0,0); render(); return; }
   if(d.discard){ ask("Discard this session? Nothing is saved.", "discard", null, true); return; }
   if(d.rate!=null && d.rate!==""){ if(S.active){ S.active.rating=+d.rate; save(); render(); } return; }
@@ -1659,7 +1751,8 @@ document.addEventListener("click", async ev=>{
     if(!Object.values(a.entries).some(x=>x.length)){ toast("Nothing logged. Discard instead."); return; }
     const nf=$("#snote"); if(nf) a.note=nf.value.trim();
     a.end=new Date().toISOString(); a.finished=true; delete a.finishing;
-    P().sessions.push(a); S.active=null; UI.draft={}; UI.warmMark={}; UI.openSlots={}; UI.staleOk=false; UI.tab="home";
+    delete a.skip; delete a.order;
+    P().sessions.push(a); S.active=null; UI.draft={}; UI.warmMark={}; UI.openSlots={}; UI.staleOk=false; UI.focusSlot=null; UI.browsing=false; UI.tab="home";
     save(); window.scrollTo(0,0); render(); toast("Session saved."); return;
   }
 
